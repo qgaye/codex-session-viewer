@@ -1,0 +1,3751 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Codex Session Viewer</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --panel-2: #f0f3f7;
+      --text: #17202a;
+      --muted: #617083;
+      --line: #d9e0ea;
+      --blue: #1f6feb;
+      --green: #167a3e;
+      --orange: #b85c00;
+      --red: #c7362f;
+      --purple: #6f42c1;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      --sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 14px;
+      letter-spacing: 0;
+      overflow: hidden;
+    }
+
+    button,
+    input,
+    select,
+    textarea {
+      font: inherit;
+    }
+
+    .app {
+      height: 100vh;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      overflow: hidden;
+    }
+
+    header {
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
+      padding: 14px 18px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.2;
+      font-weight: 650;
+    }
+
+    .status {
+      color: var(--muted);
+      font-size: 13px;
+      text-align: right;
+      min-width: 180px;
+    }
+
+    .action-row {
+      display: grid;
+      grid-template-columns: minmax(320px, 420px) minmax(260px, 360px) minmax(0, 1fr);
+      gap: 18px;
+      align-items: center;
+    }
+
+    .toolbar {
+      border-left: 1px solid var(--line);
+      padding-left: 18px;
+      display: grid;
+      grid-template-columns: minmax(260px, 1fr) 170px 150px;
+      gap: 10px;
+      align-items: center;
+      min-width: 0;
+    }
+
+    .search-group {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .session-browser {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 10px 12px;
+      align-items: center;
+      min-width: 0;
+    }
+
+    .session-browser input[type="file"] {
+      display: none;
+    }
+
+    .connection-copy {
+      display: grid;
+      gap: 2px;
+      min-width: 0;
+    }
+
+    .connection-state {
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 700;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .connection-state.connected {
+      color: var(--green);
+    }
+
+    .connection-detail {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .control,
+    .button {
+      height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--text);
+      padding: 0 12px;
+      min-width: 0;
+    }
+
+    .control option {
+      font-family: var(--mono);
+    }
+
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    .button:hover {
+      border-color: #a8b4c4;
+      background: #f8fafc;
+    }
+
+    .button.primary {
+      border-color: #1558c7;
+      background: var(--blue);
+      color: #fff;
+      box-shadow: 0 8px 18px rgba(31, 111, 235, 0.22);
+    }
+
+    .button.primary:hover {
+      border-color: #0f4fb4;
+      background: #155fd4;
+      box-shadow: 0 10px 22px rgba(31, 111, 235, 0.28);
+    }
+
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      background: rgba(15, 23, 32, 0.38);
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    .modal-backdrop[hidden] {
+      display: none;
+    }
+
+    .session-modal {
+      width: min(940px, 100%);
+      max-height: min(760px, calc(100vh - 48px));
+      background: var(--panel);
+      border: 1px solid #c8d3e1;
+      border-radius: 8px;
+      box-shadow: 0 24px 70px rgba(15, 23, 32, 0.24);
+      display: grid;
+      grid-template-rows: auto auto minmax(260px, 1fr);
+      overflow: hidden;
+    }
+
+    .modal-head {
+      padding: 16px 18px 12px;
+      border-bottom: 1px solid var(--line);
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto auto;
+      gap: 12px;
+      align-items: start;
+    }
+
+    .modal-title {
+      display: grid;
+      gap: 3px;
+      min-width: 0;
+    }
+
+    .modal-title strong {
+      font-size: 16px;
+    }
+
+    .modal-title span,
+    .modal-count {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .modal-close {
+      width: 34px;
+      height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 20px;
+      line-height: 1;
+    }
+
+    .modal-close:hover {
+      background: #f8fafc;
+      border-color: #a8b4c4;
+    }
+
+    .modal-controls {
+      padding: 12px 18px;
+      border-bottom: 1px solid var(--line);
+      background: #fbfcfe;
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) 170px 170px;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .session-list {
+      overflow: auto;
+      padding: 12px 18px 18px;
+      display: grid;
+      gap: 8px;
+      align-content: start;
+    }
+
+    .session-row {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      color: var(--text);
+      padding: 11px 12px;
+      cursor: pointer;
+      display: grid;
+      gap: 7px;
+      text-align: left;
+    }
+
+    .session-project-group {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .session-project-group::after {
+      content: "";
+      height: 1px;
+      background: var(--line);
+      flex: 1 1 auto;
+    }
+
+    .session-row:hover {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 2px rgba(31, 111, 235, 0.10);
+    }
+
+    .session-row-head {
+      display: grid;
+      grid-template-columns: 150px minmax(0, 1fr);
+      gap: 10px;
+      align-items: center;
+    }
+
+    .session-date {
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .session-id {
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 700;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .session-desc {
+      color: var(--text);
+      font-size: 13px;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .session-project {
+      justify-self: start;
+      border: 1px solid #c7d6ea;
+      border-radius: 999px;
+      background: #eef5ff;
+      color: #1b5dbf;
+      padding: 3px 7px;
+      font-size: 11px;
+      line-height: 1.2;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .session-path {
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 11px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    main {
+      display: grid;
+      grid-template-columns: 320px minmax(420px, 1fr) 420px;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    aside,
+    .timeline,
+    .details {
+      min-height: 0;
+      height: 100%;
+      overflow: auto;
+      overscroll-behavior: contain;
+    }
+
+    aside {
+      border-right: 1px solid var(--line);
+      background: var(--panel);
+      padding: 14px;
+    }
+
+    .timeline {
+      padding: 14px;
+    }
+
+    .details {
+      border-left: 1px solid var(--line);
+      background: var(--panel);
+      padding: 14px;
+    }
+
+    .section {
+      margin-bottom: 18px;
+    }
+
+    .section h2 {
+      margin: 0 0 10px;
+      font-size: 13px;
+      text-transform: uppercase;
+      color: var(--muted);
+      letter-spacing: 0.04em;
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .top-metrics {
+      grid-template-columns: repeat(4, minmax(54px, 1fr));
+      gap: 4px;
+      min-width: 0;
+      border-left: 1px solid var(--line);
+      padding-left: 18px;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      background: #fbfcfe;
+      min-width: 0;
+    }
+
+    .top-metrics .metric {
+      height: 42px;
+      padding: 3px 5px;
+      border-radius: 7px;
+      display: grid;
+      align-content: center;
+    }
+
+    .metric .value {
+      display: block;
+      font-size: 20px;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+
+    .top-metrics .value {
+      font-size: 13px;
+      line-height: 1;
+    }
+
+    .metric .label {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+
+    .top-metrics .label {
+      font-size: 9px;
+      line-height: 1.15;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .bars {
+      display: grid;
+      gap: 8px;
+    }
+
+    .bar-row {
+      display: grid;
+      grid-template-columns: minmax(100px, 1fr) 44px;
+      gap: 8px;
+      align-items: center;
+      font-size: 12px;
+    }
+
+    .bar-track {
+      position: relative;
+      height: 24px;
+      border-radius: 6px;
+      overflow: hidden;
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+    }
+
+    .bar-fill {
+      height: 100%;
+      background: #b9d4ff;
+      min-width: 2px;
+    }
+
+    .bar-label {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      padding: 0 8px;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    .tag-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .tag {
+      border: 1px solid var(--line);
+      background: #fbfcfe;
+      border-radius: 999px;
+      padding: 4px 8px;
+      font-size: 12px;
+      color: var(--muted);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .tag.active {
+      border-color: var(--blue);
+      color: var(--blue);
+      background: #eaf2ff;
+    }
+
+    .filter-stack {
+      display: grid;
+      gap: 10px;
+    }
+
+    .turn-index {
+      display: grid;
+      gap: 6px;
+    }
+
+    .turn-link {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcfe;
+      color: var(--text);
+      padding: 8px 9px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 4px 8px;
+      align-items: center;
+      cursor: pointer;
+      text-align: left;
+      min-width: 0;
+    }
+
+    .turn-link:hover {
+      border-color: #a8b4c4;
+      background: #f8fafc;
+    }
+
+    .turn-link:disabled {
+      cursor: not-allowed;
+      opacity: 0.52;
+    }
+
+    .turn-link strong {
+      font-size: 12px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .turn-link .turn-hit-count {
+      color: var(--muted);
+      font-size: 11px;
+      white-space: nowrap;
+    }
+
+    .turn-link span {
+      grid-column: 1 / -1;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 11px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .event {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 8px;
+      margin-bottom: 10px;
+      overflow: hidden;
+      cursor: pointer;
+    }
+
+    .event:hover {
+      border-color: #a8b4c4;
+    }
+
+    .event.selected {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 2px rgba(31, 111, 235, 0.12);
+    }
+
+    .event-head {
+      display: grid;
+      grid-template-columns: auto auto 1fr auto;
+      gap: 10px;
+      align-items: center;
+      padding: 10px 12px;
+    }
+
+    .badge {
+      border-radius: 999px;
+      padding: 4px 8px;
+      font-size: 12px;
+      color: #fff;
+      background: var(--muted);
+      white-space: nowrap;
+    }
+
+    .badge.tool {
+      background: var(--blue);
+    }
+
+    .badge.output {
+      background: var(--green);
+    }
+
+    .badge.msg {
+      background: var(--purple);
+    }
+
+    .badge.reasoning {
+      background: var(--orange);
+    }
+
+    .badge.error {
+      background: var(--red);
+    }
+
+    .badge.upstream {
+      background: #0f766e;
+    }
+
+    .badge.downstream {
+      background: #7c3aed;
+    }
+
+    .badge.runtime {
+      background: #64748b;
+    }
+
+    .event-title {
+      min-width: 0;
+    }
+
+    .event-title strong {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 14px;
+    }
+
+    .event-title span {
+      color: var(--muted);
+      font-size: 12px;
+      font-family: var(--mono);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      display: block;
+    }
+
+    .event-time {
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+      text-align: right;
+    }
+
+    .event-preview {
+      border-top: 1px solid var(--line);
+      padding: 8px 12px 10px;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      max-height: 92px;
+      overflow: hidden;
+      background: #fbfcfe;
+    }
+
+    .turn-divider {
+      border: 1px solid #b7c5d8;
+      border-radius: 8px;
+      background: #eef4fb;
+      padding: 10px 12px;
+      margin: 14px 0 10px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 6px 10px;
+      align-items: center;
+    }
+
+    .turn-toggle {
+      border: 0;
+      background: transparent;
+      color: var(--text);
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      min-width: 0;
+      cursor: pointer;
+      text-align: left;
+      font-weight: 700;
+    }
+
+    .turn-toggle:hover {
+      color: var(--blue);
+    }
+
+    .turn-caret {
+      width: 16px;
+      height: 16px;
+      border: 1px solid #9cadc2;
+      border-radius: 4px;
+      display: inline-grid;
+      place-items: center;
+      font-family: var(--mono);
+      font-size: 11px;
+      line-height: 1;
+      background: #fff;
+      flex: 0 0 auto;
+    }
+
+    .turn-divider strong {
+      font-size: 13px;
+      min-width: 0;
+    }
+
+    .turn-summary {
+      grid-column: 1 / -1;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+
+    .turn-meta {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+    }
+
+    .turn-count,
+    .turn-duration,
+    .turn-token {
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .turn-duration,
+    .turn-token {
+      border: 1px solid #c5d1df;
+      border-radius: 999px;
+      background: #fff;
+      padding: 3px 7px;
+      font-family: var(--mono);
+    }
+
+    .turn-divider.collapsed {
+      margin-bottom: 8px;
+    }
+
+    .empty {
+      min-height: 300px;
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      text-align: center;
+      padding: 24px;
+    }
+
+    .detail-head {
+      display: grid;
+      gap: 6px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 12px;
+    }
+
+    .detail-head h2 {
+      margin: 0;
+      font-size: 16px;
+      line-height: 1.25;
+      overflow-wrap: anywhere;
+    }
+
+    .detail-meta {
+      display: grid;
+      gap: 4px;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+
+    .detail-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin: 0 0 12px;
+    }
+
+    .small-button {
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: var(--panel);
+      height: 32px;
+      padding: 0 10px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    .small-button:hover {
+      background: #f8fafc;
+    }
+
+    .small-button.jump-button {
+      border-color: var(--blue);
+      background: #eaf2ff;
+      color: var(--blue);
+      font-weight: 600;
+    }
+
+    .small-button.jump-button:hover {
+      background: #dbeafe;
+    }
+
+    pre {
+      margin: 0;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #0f1720;
+      color: #d7e1ef;
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.45;
+      overflow: auto;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      max-height: calc(100vh - 220px);
+    }
+
+    mark.search-hit {
+      border-radius: 3px;
+      background: #fff08a;
+      color: #17202a;
+      padding: 0 2px;
+    }
+
+    pre mark.search-hit {
+      background: #ffe066;
+      color: #0f1720;
+    }
+
+    .notice {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .structured-text {
+      display: grid;
+      gap: 10px;
+      margin: 12px 0;
+    }
+
+    .structured-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcfe;
+      overflow: hidden;
+    }
+
+    .structured-card h3 {
+      margin: 0;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--line);
+      background: #eef4fb;
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .structured-body {
+      padding: 9px 10px;
+      color: var(--text);
+      font-size: 12px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    .structured-body.mono {
+      font-family: var(--mono);
+    }
+
+    .structured-meta {
+      color: var(--muted);
+      font-size: 11px;
+      padding: 0 10px 9px;
+    }
+
+    .patch-summary {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 0 0 10px;
+    }
+
+    .patch-pill {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #fbfcfe;
+      color: var(--muted);
+      padding: 4px 8px;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .patch-file {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcfe;
+      margin: 10px 0;
+      overflow: hidden;
+    }
+
+    .patch-file-head {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+      padding: 9px 10px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .patch-kind {
+      border-radius: 999px;
+      background: #eaf2ff;
+      color: var(--blue);
+      padding: 3px 7px;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .patch-file-name {
+      font-family: var(--mono);
+      font-size: 12px;
+      overflow-wrap: anywhere;
+      min-width: 0;
+    }
+
+    .patch-count {
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .patch-hunk-title {
+      padding: 7px 10px;
+      background: #eef4fb;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 11px;
+      border-top: 1px solid var(--line);
+    }
+
+    .patch-lines {
+      margin: 0;
+      max-height: 360px;
+      overflow: auto;
+      background: #ffffff;
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .patch-line {
+      display: grid;
+      grid-template-columns: 22px minmax(0, 1fr);
+      gap: 8px;
+      padding: 2px 10px;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    .patch-line.add {
+      background: #ecfdf3;
+      color: #0f6b35;
+    }
+
+    .patch-line.del {
+      background: #fff1f0;
+      color: #9f1d18;
+    }
+
+    .patch-line.context {
+      color: var(--muted);
+    }
+
+    .patch-line.meta {
+      background: #f4f6f9;
+      color: var(--muted);
+    }
+
+    .type-guide {
+      display: grid;
+      gap: 8px;
+    }
+
+    .guide-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcfe;
+      padding: 9px;
+      display: grid;
+      gap: 4px;
+    }
+
+    .guide-card strong {
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+
+    .guide-card span {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .guide-card .guide-meta {
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+
+    .token-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin: 12px 0;
+    }
+
+    .token-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcfe;
+      padding: 9px;
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .token-card strong {
+      font-family: var(--mono);
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+
+    .token-card .token-value {
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .token-card span {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .context-grid {
+      display: grid;
+      gap: 8px;
+      margin: 12px 0;
+    }
+
+    .context-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcfe;
+      padding: 10px;
+      display: grid;
+      gap: 5px;
+      min-width: 0;
+    }
+
+    .context-card strong {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text);
+      overflow-wrap: anywhere;
+    }
+
+    .context-value {
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.45;
+      color: var(--text);
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .context-card span {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    @media (max-width: 1180px) {
+      .top-metrics {
+        grid-template-columns: repeat(4, minmax(50px, 1fr));
+      }
+
+      main {
+        grid-template-columns: 280px minmax(360px, 1fr);
+      }
+
+      .details {
+        display: none;
+      }
+    }
+
+    @media (max-width: 820px) {
+      .title-row {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+
+      .status {
+        text-align: left;
+      }
+
+      .top-metrics {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        border-left: 0;
+        border-top: 1px solid var(--line);
+        padding-left: 0;
+        padding-top: 10px;
+      }
+
+      .action-row {
+        grid-template-columns: 1fr;
+        gap: 10px;
+      }
+
+      .toolbar {
+        grid-template-columns: 1fr;
+        border-left: 0;
+        border-top: 1px solid var(--line);
+        padding-left: 0;
+        padding-top: 10px;
+      }
+
+      .session-browser {
+        grid-template-columns: 1fr;
+      }
+
+      .modal-backdrop {
+        padding: 10px;
+      }
+
+      .session-modal {
+        max-height: calc(100vh - 20px);
+      }
+
+      .modal-controls,
+      .session-row-head {
+        grid-template-columns: 1fr;
+      }
+
+      main {
+        grid-template-columns: 1fr;
+        overflow: auto;
+      }
+
+      aside {
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+        height: auto;
+        overflow: visible;
+      }
+
+      .timeline {
+        min-height: 480px;
+        height: auto;
+        overflow: visible;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="title-row">
+        <h1>Codex Session Viewer</h1>
+        <div class="status" id="status">No session loaded</div>
+      </div>
+      <div class="action-row">
+        <div class="session-browser">
+          <button class="button primary" id="chooseCodexDirButton" type="button">Choose .codex Directory</button>
+          <div class="connection-copy">
+            <strong class="connection-state" id="codexConnectionState">Connect your Codex sessions</strong>
+            <span class="connection-detail" id="codexConnectionDetail">Mac users: choose the hidden <code>.codex</code> directory in your home folder.</span>
+          </div>
+          <input id="codexDirInput" type="file" webkitdirectory directory multiple>
+        </div>
+        <div class="metrics top-metrics" id="metrics"></div>
+        <div class="toolbar">
+          <div class="search-group">
+            <input class="control" id="searchInput" type="search" placeholder="Search message payload">
+            <button class="button" id="searchButton" type="button">Search</button>
+          </div>
+          <select class="control" id="kindFilter">
+            <option value="all">All event types</option>
+          </select>
+          <button class="button" id="exportButton" disabled>Export Redacted</button>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <aside>
+        <section class="section">
+          <h2>Turn Index</h2>
+          <div class="turn-index" id="turnIndex"></div>
+        </section>
+        <section class="section">
+          <h2>Event Types</h2>
+          <div class="bars" id="typeBars"></div>
+        </section>
+        <section class="section">
+          <h2>Event Type Guide</h2>
+          <div class="type-guide" id="typeGuide"></div>
+        </section>
+        <section class="section">
+          <h2>Notes</h2>
+          <div class="notice">
+            Reasoning content is usually encrypted in Codex session files. This viewer focuses on visible messages, tool calls, tool outputs, and searchable execution signals.
+          </div>
+        </section>
+      </aside>
+
+      <section class="timeline" id="timeline">
+        <div class="empty">
+          <div>
+            <strong>Choose your <code>.codex</code> directory</strong><br>
+            Then pick a session from <code>sessions/</code>.
+          </div>
+        </div>
+      </section>
+
+      <section class="details" id="details">
+        <div class="empty">Select an event to inspect its redacted payload.</div>
+      </section>
+    </main>
+  </div>
+
+  <div class="modal-backdrop" id="sessionModal" hidden>
+    <section class="session-modal" role="dialog" aria-modal="true" aria-labelledby="sessionModalTitle">
+      <div class="modal-head">
+        <div class="modal-title">
+          <strong id="sessionModalTitle">Choose a Codex session</strong>
+          <span>Select from sessions discovered under your <code>.codex</code> directory.</span>
+          <span class="modal-count" id="sessionCatalogMeta">No sessions listed</span>
+        </div>
+        <button class="small-button" id="changeCodexDirButton" type="button">Change Directory</button>
+        <button class="modal-close" id="closeSessionModalButton" type="button" aria-label="Close session chooser">×</button>
+      </div>
+      <div class="modal-controls">
+        <input class="control" id="sessionCatalogFilter" type="search" placeholder="Filter by session id">
+        <select class="control" id="sessionCatalogSort" aria-label="Sort sessions by time">
+          <option value="desc">Newest first</option>
+          <option value="asc">Oldest first</option>
+        </select>
+        <select class="control" id="sessionCatalogView" aria-label="Session view mode">
+          <option value="project">Group by project</option>
+          <option value="flat">Flat list</option>
+        </select>
+      </div>
+      <div class="session-list" id="sessionCatalogList"></div>
+    </section>
+  </div>
+
+  <script>
+    const state = {
+      fileName: "",
+      sessionSize: 0,
+      rawLines: [],
+      events: [],
+      filtered: [],
+      selectedId: null,
+      collapsedTurns: new Set(),
+      searchQuery: "",
+      sessionCatalog: [],
+      sessionCatalogFilter: "",
+      sessionCatalogSort: "desc",
+      sessionCatalogView: "project",
+      codexDirectoryHandle: null,
+      codexDirectoryLabel: "",
+    };
+
+    const el = {
+      status: document.getElementById("status"),
+      chooseCodexDirButton: document.getElementById("chooseCodexDirButton"),
+      codexConnectionState: document.getElementById("codexConnectionState"),
+      codexConnectionDetail: document.getElementById("codexConnectionDetail"),
+      changeCodexDirButton: document.getElementById("changeCodexDirButton"),
+      sessionCatalogFilter: document.getElementById("sessionCatalogFilter"),
+      sessionCatalogSort: document.getElementById("sessionCatalogSort"),
+      sessionCatalogView: document.getElementById("sessionCatalogView"),
+      sessionCatalogList: document.getElementById("sessionCatalogList"),
+      sessionCatalogMeta: document.getElementById("sessionCatalogMeta"),
+      sessionModal: document.getElementById("sessionModal"),
+      closeSessionModalButton: document.getElementById("closeSessionModalButton"),
+      codexDirInput: document.getElementById("codexDirInput"),
+      searchInput: document.getElementById("searchInput"),
+      searchButton: document.getElementById("searchButton"),
+      kindFilter: document.getElementById("kindFilter"),
+      exportButton: document.getElementById("exportButton"),
+      metrics: document.getElementById("metrics"),
+      typeBars: document.getElementById("typeBars"),
+      typeGuide: document.getElementById("typeGuide"),
+      turnIndex: document.getElementById("turnIndex"),
+      timeline: document.getElementById("timeline"),
+      details: document.getElementById("details"),
+    };
+
+    const eventTypeDocs = {
+      session_meta: {
+        role: "Rollout 会话元数据，通常是 JSONL 第一条记录。",
+        watch: "重点看 session_id/id、cwd、source、originator、cli_version、model_provider、base_instructions、dynamic_tools、git。它描述这个 thread/session 的来源和启动环境，不是一条对话消息。",
+        direction: "持久化元数据",
+      },
+      turn_context: {
+        role: "每轮 turn 的持久化环境快照。",
+        watch: "可以看到 turn_id、cwd、workspace_roots、current_date/timezone、approval_policy、sandbox_policy、permission_profile、network、model、effort、collaboration_mode 等。resume/fork 会用它恢复当时的执行上下文基线。",
+        direction: "影响模型和工具执行的运行时上下文",
+      },
+      world_state: {
+        role: "用于恢复 world-state diff 的持久化状态。",
+        watch: "payload.full=true 表示全量快照；false 表示基于上一份 world state 的 merge patch。它不是用户/助手消息，而是恢复上下文差异用的内部状态。",
+        direction: "持久化恢复状态",
+      },
+      compacted: {
+        role: "上下文压缩记录。",
+        watch: "message 是压缩摘要；replacement_history 若存在，是压缩后用于替代旧上下文的 ResponseItem 列表；window_* 字段用于标识上下文窗口链。",
+        direction: "上下文压缩/恢复记录",
+      },
+      inter_agent_communication: {
+        role: "旧格式的 agent 间通信记录。",
+        watch: "看 author、recipient、other_recipients、content/encrypted_content、trigger_turn。新路径更多会持久化成 response_item(type=agent_message) 加 metadata。",
+        direction: "agent 间通信",
+      },
+      inter_agent_communication_metadata: {
+        role: "agent 间通信的本地附加元数据。",
+        watch: "目前主要是 trigger_turn，用来表达这条通信是否应触发接收方 turn；它不属于 Responses API 的模型 item。",
+        direction: "agent 间通信元数据",
+      },
+      function_call: {
+        role: "Responses API 的 function_call 模型输出项。",
+        watch: "重点看 name、namespace、call_id，以及 arguments。arguments 在源码中按字符串保存，内容通常是 JSON，需要再解析。",
+        direction: "模型下发工具调用",
+      },
+      function_call_output: {
+        role: "function_call 对应的工具返回结果。",
+        watch: "通过 call_id 和 function_call 配对。output 可能是普通字符串，也可能是结构化 content_items。",
+        direction: "返回给模型的工具结果",
+      },
+      custom_tool_call: {
+        role: "Responses API 的 custom/freeform tool 调用项。",
+        watch: "重点看 name、call_id、input、status。input 是自由文本，不一定是 JSON；apply_patch、exec、代码片段等都可能走这里，取决于当前工具定义。",
+        direction: "模型下发自定义工具调用",
+      },
+      custom_tool_call_output: {
+        role: "custom_tool_call 对应的返回结果。",
+        watch: "通过 call_id 与 custom_tool_call 配对。output 使用和 function_call_output 相同的编码：可能是字符串，也可能是结构化 content_items。",
+        direction: "返回给模型的自定义工具结果",
+      },
+      tool_search_call: {
+        role: "模型发起的 tool_search 调用项。",
+        watch: "重点看 execution、arguments、call_id/status。它用于请求可用工具检索，不是普通业务工具本身。",
+        direction: "模型下发工具检索请求",
+      },
+      tool_search_output: {
+        role: "tool_search 的检索结果。",
+        watch: "重点看 tools 列表、execution、status，并用 call_id 和对应 tool_search_call 配对。",
+        direction: "返回给模型的工具检索结果",
+      },
+      web_search_call: {
+        role: "模型触发 web search 的 Responses API item。",
+        watch: "重点看 status 和 action。action 可能包含 search/query 等搜索动作信息。",
+        direction: "模型下发网页检索动作",
+      },
+      image_generation_call: {
+        role: "模型触发图片生成的 Responses API item。",
+        watch: "重点看 status、revised_prompt、result。result 通常是生成结果引用或编码数据。",
+        direction: "模型下发图片生成动作",
+      },
+      local_shell_call: {
+        role: "Responses API 的 local_shell_call item。",
+        watch: "重点看 call_id/status/action。它描述模型侧记录到的本地 shell 动作，不等同于完整终端 stdout/stderr 事件。",
+        direction: "模型/运行时的 shell 调用记录",
+      },
+      message: {
+        role: "Responses API/message-history 层的模型可见消息。",
+        watch: "必须结合 payload.role 判断来源。role=assistant 是模型输出的 source of truth；role=user/developer/system 可能是用户输入，也可能是 Codex 注入的环境、规则、hook/context 内容。",
+        direction: "模型上下文项；方向取决于 role",
+      },
+      agent_message: {
+        role: "agent_message 是一个重名 payload.type，含义取决于外层 record.type。",
+        watch: "若 record.type=response_item，它是 ResponseItem::AgentMessage，通常表示多 agent 通信的模型可见 item，payload 有 author/recipient/content；若 record.type=event_msg，它是 EventMsg::AgentMessage，是 legacy/UI 纯文本展示事件，payload 有 message/phase/memory_citation。",
+        direction: "可能是模型上下文项，也可能是 UI/legacy 事件",
+      },
+      user_message: {
+        role: "legacy/UI 事件层的用户消息。",
+        watch: "用于识别用户实际提交或追加的需求，以及 turn 边界。它不等同于完整模型上行上下文；完整上下文通常还包含 message(role=user/developer/system) 的运行时注入内容。",
+        direction: "用户提交事件",
+      },
+      reasoning: {
+        role: "Responses API 的 reasoning item。",
+        watch: "summary 可能可见；content/encrypted_content 取决于模型和配置，很多 rollout 中无法直接读取完整推理。",
+        direction: "模型推理记录",
+      },
+      compaction: {
+        role: "Responses API 的 compaction item。",
+        watch: "通常包含 encrypted_content，用于服务端/模型侧压缩状态，不等同于 rollout 顶层 compacted 摘要。",
+        direction: "模型上下文压缩项",
+      },
+      context_compaction: {
+        role: "Responses API 的 context_compaction item。",
+        watch: "通常携带 encrypted_content 或压缩上下文标记；和顶层 compacted 一起服务于上下文窗口恢复。",
+        direction: "模型上下文压缩项",
+      },
+      task_started: {
+        role: "一次 turn 开始的事件。源码中 Rust 变体是 TurnStarted，但 wire/JSON 名称为 task_started。",
+        watch: "重点看 turn_id。它通常和 task_complete 配对，并作为恢复/分段时的重要边界。",
+        direction: "运行状态记录",
+      },
+      turn_started: {
+        role: "task_started 的兼容别名。新写出的 rollout 通常使用 task_started。",
+        watch: "若旧文件中出现 turn_started，按 task_started 理解。",
+        direction: "运行状态记录",
+      },
+      task_complete: {
+        role: "一次 turn 完成的事件。源码中 Rust 变体是 TurnComplete，但 wire/JSON 名称为 task_complete。",
+        watch: "通常包含 turn_id、duration_ms、last_agent_message 等。它是恢复/分段时的重要边界，不是模型消息本身。",
+        direction: "运行状态记录",
+      },
+      turn_complete: {
+        role: "task_complete 的兼容别名。新写出的 rollout 通常使用 task_complete。",
+        watch: "若旧文件中出现 turn_complete，按 task_complete 理解。",
+        direction: "运行状态记录",
+      },
+      token_count: {
+        role: "Token 使用量和限流状态等遥测信息。",
+        watch: "适合分析为什么会话很长、成本较高，或是否接近速率限制。",
+        direction: "运行状态记录",
+      },
+      agent_reasoning: {
+        role: "legacy/UI 事件层的 reasoning summary。",
+        watch: "通常是可展示的推理摘要文本，来自 reasoning item 或流式 reasoning 事件的兼容投影。",
+        direction: "模型推理展示事件",
+      },
+      agent_reasoning_raw_content: {
+        role: "legacy/UI 事件层的 raw reasoning 内容。",
+        watch: "只有配置允许显示 raw reasoning 时才有实际内容；敏感或加密内容不应假设可读。",
+        direction: "模型推理展示事件",
+      },
+      patch_apply_end: {
+        role: "apply_patch/文件修改流程完成事件。",
+        watch: "重点看 success/status、stdout/stderr 或错误字段，判断补丁是否实际应用成功。",
+        direction: "工具执行结果事件",
+      },
+      thread_goal_updated: {
+        role: "长期 thread goal 状态更新事件。",
+        watch: "看 objective/status/budget 等字段，用于了解当前线程目标是否完成或阻塞。",
+        direction: "运行状态记录",
+      },
+      context_compacted: {
+        role: "上下文压缩完成的 legacy/UI 事件。",
+        watch: "用于展示压缩发生了；真正恢复上下文时还要看顶层 compacted 和 replacement_history。",
+        direction: "运行状态记录",
+      },
+      entered_review_mode: {
+        role: "进入 review mode 的事件。",
+        watch: "payload 是 ReviewRequest，用于理解本轮是否切到代码审查流程。",
+        direction: "运行状态记录",
+      },
+      exited_review_mode: {
+        role: "退出 review mode 的事件。",
+        watch: "可带 review_output，表示 review 结束时是否有最终结果。",
+        direction: "运行状态记录",
+      },
+      mcp_tool_call_end: {
+        role: "MCP 工具调用结束事件。",
+        watch: "通过 call_id/name/server/status 与开始事件或 response item 配对，查看工具执行结果。",
+        direction: "工具执行结果事件",
+      },
+      mcp_tool_call_begin: {
+        role: "MCP 工具调用开始事件。",
+        watch: "通过 call_id 与 mcp_tool_call_end 配对。invocation 里包含 server、tool 和 arguments。",
+        direction: "模型下发 MCP 工具调用",
+      },
+      mcp_tool_call: {
+        role: "MCP 工具调用状态项。",
+        watch: "重点看 id/call_id、server、tool、arguments、status、result/error。completed/failed 状态通常已经包含结果。",
+        direction: "MCP 工具调用记录",
+      },
+      thread_rolled_back: {
+        role: "thread rollback 事件。",
+        watch: "重点看 num_turns。恢复历史时会据此丢弃最后 N 个用户 turn。",
+        direction: "历史修正事件",
+      },
+      turn_aborted: {
+        role: "turn 被中断或取消的事件。",
+        watch: "看 turn_id/reason/message。恢复和 UI 展示会用它判断某轮没有正常完成。",
+        direction: "运行状态记录",
+      },
+      web_search_end: {
+        role: "web search 完成事件。",
+        watch: "通常用于 UI/回放展示搜索结束；具体搜索调用还可能在 response_item(type=web_search_call) 中。",
+        direction: "工具执行结果事件",
+      },
+      image_generation_end: {
+        role: "图片生成完成事件。",
+        watch: "看 call_id/status/result/path 等字段，具体字段取决于生成后是否保存了产物。",
+        direction: "工具执行结果事件",
+      },
+      sub_agent_activity: {
+        role: "v2 path-based sub-agent 活动事件。",
+        watch: "看 agent path、activity/status/message，用于理解父线程看到的子 agent 进度。",
+        direction: "多 agent 运行状态",
+      },
+      item_completed: {
+        role: "新式 turn item 完成事件。",
+        watch: "rollout policy 当前只持久化没有等价 response_item 的 Plan/Sleep 这类 item_completed；其它 item_completed 通常会被过滤或转换为 legacy 事件。",
+        direction: "运行状态/展示事件",
+      },
+      raw_response_item: {
+        role: "完整 ResponseItem 的事件封装。",
+        watch: "协议层支持，但 rollout policy 默认不持久化 raw_response_item；真正可恢复的模型 item 通常作为顶层 response_item 写入。",
+        direction: "实时事件；通常不在 rollout 中持久化",
+      },
+      plan_update: {
+        role: "计划更新事件。",
+        watch: "协议层支持，但当前 rollout policy 默认不持久化 plan_update；若要看持久化计划完成，关注 item_completed 中的 Plan。",
+        direction: "实时 UI 事件；通常不在 rollout 中持久化",
+      },
+    };
+
+    function eventDoc(type, event = null) {
+      if (type === "agent_message" && event?.recordType === "response_item") {
+        return {
+          role: "ResponseItem::AgentMessage，多 agent 通信的模型可见 item。",
+          watch: "重点看 author、recipient、content，以及 internal_chat_message_metadata_passthrough。它会作为模型历史 item 持久化，不是 EventMsg::AgentMessage 的纯展示事件。",
+          direction: "模型上下文项/agent 间通信",
+        };
+      }
+      if (type === "agent_message" && event?.recordType === "event_msg") {
+        return {
+          role: "EventMsg::AgentMessage，legacy/UI 事件层的助手消息。",
+          watch: "payload.message 是从 TurnItem::AgentMessage 投影出的纯文本展示事件。它经常和 response_item(type=message, role=assistant) 内容相同，但不保留完整结构化 content、id、role 和内部 metadata。",
+          direction: "发送给客户端/UI 的助手展示事件",
+        };
+      }
+      return eventTypeDocs[type] || {
+        role: "Codex rollout 或协议层记录的一类 item/event。",
+        watch: "先看外层 record.type 判断它属于 RolloutItem 的哪一类，再看 payload.type。未知类型可能来自新版 Codex、旧版兼容字段或插件/实验特性。",
+        direction: "需要结合 record.type 和 payload 判断",
+      };
+    }
+
+    function eventDirection(event) {
+      if (event.eventType === "message") {
+        if (event.payload.role === "user") return "user 角色模型上下文项";
+        if (event.payload.role === "assistant") return "模型输出的 assistant 上下文项";
+        if (event.payload.role === "developer") return "developer 角色模型上下文项";
+        if (event.payload.role === "system") return "system 角色模型上下文项";
+      }
+      return eventDoc(event.eventType).direction;
+    }
+
+    function messageLayerNote(event) {
+      if (event.eventType === "message" && event.payload.role === "assistant") {
+        return "这是 ResponseItem::Message(role=assistant)，是模型历史/恢复上下文的 source of truth；同一内容可能还会被投影成 event_msg(agent_message) 供旧事件流和 UI 回放使用。";
+      }
+      if (event.eventType === "agent_message") {
+        if (event.recordType === "response_item") {
+          return "这是 ResponseItem::AgentMessage，通常是多 agent 通信的模型可见 item；它不同于 EventMsg::AgentMessage 的纯文本 UI/legacy 事件。";
+        }
+        return "这是 EventMsg::AgentMessage，是 legacy/UI 事件层的纯文本投影；同一内容可能也有一条 response_item(message, role=assistant) 作为模型输出记录。";
+      }
+      if (event.eventType === "message" && event.payload.role === "user") {
+        return "这是 ResponseItem::Message(role=user)，会进入模型上下文；它不一定只包含用户原始输入，也可能包含 Codex 组装的运行时上下文。";
+      }
+      return "";
+    }
+
+    function userMessageDifferenceNote(event) {
+      if (event.eventType === "message" && event.payload.role === "user") {
+        return "这条更像“真正发给模型的材料包”。里面可能有你输入的话，也可能夹带当前目录、文件、图片、环境信息等 Codex 自动补充的内容，所以它不一定等于聊天框里那句原话。";
+      }
+      if (event.eventType === "user_message") {
+        return "这条更像“聊天记录里展示给人看的用户消息”。它通常更接近你实际提交的内容，也常用来标记一轮对话的开始，但模型真正收到的全部内容要看 message(role=user)。";
+      }
+      return "";
+    }
+
+    function assistantMessageDifferenceNote(event) {
+      if (event.eventType === "message" && event.payload.role === "assistant") {
+        return "这条更像“助手回答的完整保存版”。恢复会话、继续对话时主要靠它；除了文字，还可能保留更细的内容结构、id 等信息。";
+      }
+      if (event.eventType === "agent_message") {
+        if (event.recordType === "response_item") {
+          return "这里的 agent_message 通常是不同 agent 之间传话用的记录，会被当作模型可见内容处理；它不是普通助手回复的展示副本。";
+        }
+        return "这条更像“把助手回答抽出来方便展示/回放的文本副本”。看起来经常和 message(role=assistant) 差不多，但继续会话时更完整、更可靠的记录是 message(role=assistant)。";
+      }
+      return "";
+    }
+
+    const eventDetailConfigs = {
+      default: [
+        { label: "含义", value: ({ doc }) => doc.role },
+      ],
+      message: [
+        { label: "含义", value: ({ doc }) => doc.role },
+        { label: "与 user_message 的区别", value: ({ event }) => userMessageDifferenceNote(event) },
+        { label: "与 agent_message 的区别", value: ({ event }) => assistantMessageDifferenceNote(event) },
+      ],
+      user_message: [
+        { label: "含义", value: ({ doc }) => doc.role },
+        { label: "与 message(role=user) 的区别", value: ({ event }) => userMessageDifferenceNote(event) },
+      ],
+      agent_message: [
+        { label: "含义", value: ({ doc }) => doc.role },
+        { label: "与 message(role=assistant) 的区别", value: ({ event }) => assistantMessageDifferenceNote(event) },
+      ],
+      token_count: [
+        { label: "含义", value: ({ doc }) => doc.role },
+      ],
+    };
+
+    function detailRowsForEvent(event) {
+      const doc = eventDoc(event.eventType, event);
+      const config = eventDetailConfigs[event.eventType] || eventDetailConfigs.default;
+      return config
+        .map((item) => {
+          const value = item.value({ event, doc });
+          return value ? { label: item.label, value } : null;
+        })
+        .filter(Boolean);
+    }
+
+    function renderDetailRows(rows) {
+      return rows
+        .map((row) => `<strong>${escapeHtml(row.label)}：</strong>${highlightMatches(row.value)}<br>`)
+        .join("");
+    }
+
+    function messageStructuredTextPanel(event) {
+      if (event.eventType !== "message" && event.eventType !== "user_message" && event.eventType !== "agent_message") return "";
+      const role = event.eventType === "user_message"
+        ? "user_message"
+        : event.eventType === "agent_message"
+          ? "agent_message"
+          : event.payload.role || "unknown";
+      if (role !== "user" && role !== "developer" && role !== "user_message" && role !== "assistant" && role !== "agent_message") return "";
+      const text = textFromOutput(event.payload.message || event.payload.content);
+      if (!text.trim()) return "";
+
+      const sections = role === "user" || role === "user_message"
+        ? structuredUserMessageSections(text)
+        : role === "assistant" || role === "agent_message"
+          ? structuredAssistantMessageSections(text, role, event)
+          : structuredDeveloperMessageSections(text);
+      if (!sections.length) return "";
+
+      return `
+        <div class="section">
+          <h2>Structured Message Text</h2>
+          <div class="structured-text">
+            ${sections.map(renderStructuredSection).join("")}
+          </div>
+        </div>
+      `;
+    }
+
+    function structuredAssistantMessageSections(text, role, event) {
+      const meta = role === "assistant"
+        ? "来源：response_item(message, role=assistant)，模型输出层的权威历史记录。"
+        : event.recordType === "response_item"
+          ? "来源：response_item(agent_message)，多 agent 通信的模型可见记录。"
+          : "来源：event_msg(agent_message)，legacy/UI 纯文本展示事件。";
+      return [{
+        title: event.recordType === "response_item" && role === "agent_message"
+          ? "Agent 间消息内容"
+          : "助手输出文本",
+        body: text.trim(),
+        meta,
+      }];
+    }
+
+    function toolCallKind(event) {
+      if (event.eventType === "function_call" || event.eventType === "function_call_output") return "function";
+      if (event.eventType === "custom_tool_call" || event.eventType === "custom_tool_call_output") return "custom";
+      if (event.eventType === "mcp_tool_call_begin" || event.eventType === "mcp_tool_call_end" || event.eventType === "mcp_tool_call" || event.eventType === "mcp_tool_call_output") return "mcp";
+      return "";
+    }
+
+    function toolCallPhase(event) {
+      if (event.eventType === "function_call" || event.eventType === "custom_tool_call" || event.eventType === "mcp_tool_call_begin") return "input";
+      if (event.eventType === "function_call_output" || event.eventType === "custom_tool_call_output" || event.eventType === "mcp_tool_call_end" || event.eventType === "mcp_tool_call_output") return "output";
+      if (event.eventType === "mcp_tool_call") {
+        if (event.payload.result || event.payload.error || event.payload.status === "completed" || event.payload.status === "failed") return "complete";
+        return "input";
+      }
+      return "";
+    }
+
+    function functionCallPanel(event) {
+      const kind = toolCallKind(event);
+      if (!kind) return "";
+      const phase = toolCallPhase(event);
+      if (phase === "input") return renderFunctionPanel(toolPanelTitle(kind, "input"), toolCallInputSections(event, kind));
+      if (phase === "output") return renderFunctionPanel(toolPanelTitle(kind, "output"), toolCallOutputSections(event, kind));
+      if (phase === "complete") {
+        return renderFunctionPanel(toolPanelTitle(kind, "complete"), [
+          ...toolCallInputSections(event, kind),
+          ...toolCallOutputSections(event, kind),
+        ]);
+      }
+      return "";
+    }
+
+    function toolPanelTitle(kind, phase) {
+      const name = kind === "function"
+        ? "Function Call"
+        : kind === "custom"
+          ? "Custom Tool Call"
+          : "MCP Tool Call";
+      if (phase === "input") return name;
+      if (phase === "output") return `${name} Output`;
+      return name;
+    }
+
+    function toolCallInputSections(event, kind) {
+      const payload = event.payload || {};
+      if (kind === "function") {
+        const args = parseMaybeJson(payload.arguments);
+        return [
+          {
+            title: "cmd",
+            body: formatReadableValue(commandFromArgs(payload.name, args)),
+            mono: true,
+          },
+          {
+            title: "arguments",
+            body: formatReadableValue(args || payload.arguments || "-"),
+            mono: true,
+          },
+        ];
+      }
+      if (kind === "custom") {
+        return [
+          {
+            title: "cmd",
+            body: formatReadableValue(payload.input || payload.name || "-"),
+            mono: true,
+          },
+          {
+            title: "tool",
+            body: formatReadableValue(payload.name || "-"),
+            mono: true,
+          },
+        ];
+      }
+
+      const invocation = payload.invocation || {};
+      const server = payload.server || invocation.server || "";
+      const tool = payload.tool || invocation.tool || payload.name || "";
+      const args = payload.arguments ?? invocation.arguments;
+      return [
+        {
+          title: "cmd",
+          body: formatReadableValue([server, tool].filter(Boolean).join(".") || "-"),
+          mono: true,
+        },
+        {
+          title: "arguments",
+          body: formatReadableValue(args ?? "-"),
+          mono: true,
+        },
+      ];
+    }
+
+    function toolCallOutputSections(event, kind) {
+      const payload = event.payload || {};
+      const output = kind === "mcp"
+        ? extractMcpOutput(payload)
+        : extractFunctionOutput(payload.output ?? payload.content ?? payload.message ?? "");
+      const sections = [{
+        title: "output",
+        body: formatReadableValue(output),
+        mono: true,
+      }];
+      if (kind === "mcp" && payload.duration) {
+        sections.push({
+          title: "duration",
+          body: formatReadableValue(payload.duration),
+          mono: true,
+        });
+      }
+      return sections;
+    }
+
+    function commandFromArgs(name, args) {
+      if (!args || typeof args !== "object" || Array.isArray(args)) return name || String(args || "-");
+      return args.cmd || args.command || args.code || args.query || args.path || name || JSON.stringify(args);
+    }
+
+    function renderFunctionPanel(title, sections) {
+      if (!sections.length) return "";
+      return `
+        <div class="section">
+          <h2>${escapeHtml(title)}</h2>
+          <div class="structured-text">
+            ${sections.map(renderStructuredSection).join("")}
+          </div>
+        </div>
+      `;
+    }
+
+    function extractFunctionOutput(raw) {
+      const parsed = parseMaybeJson(raw);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && Object.prototype.hasOwnProperty.call(parsed, "body")) {
+        const body = parsed.body;
+        if (Array.isArray(body)) return textFromContentItems(body) || body;
+        return body || "-";
+      }
+      if (Array.isArray(parsed)) return textFromContentItems(parsed) || parsed;
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return parsed || raw || "-";
+      const keys = ["output", "stdout", "stderr", "result", "text", "content", "error"];
+      const key = keys.find((item) => Object.prototype.hasOwnProperty.call(parsed, item) && parsed[item] != null && parsed[item] !== "");
+      return key ? parsed[key] : raw || "-";
+    }
+
+    function extractMcpOutput(payload) {
+      const result = payload.result ?? payload.output ?? payload.error ?? "";
+      const parsed = parseMaybeJson(result);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        if (Object.prototype.hasOwnProperty.call(parsed, "Ok")) return callToolResultToText(parsed.Ok);
+        if (Object.prototype.hasOwnProperty.call(parsed, "Err")) return parsed.Err || "-";
+        return callToolResultToText(parsed);
+      }
+      return parsed || "-";
+    }
+
+    function callToolResultToText(result) {
+      const parsed = parseMaybeJson(result);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return parsed || "-";
+      const pieces = [];
+      const contentText = textFromContentItems(parsed.content);
+      if (contentText) pieces.push(contentText);
+      const structured = parsed.structuredContent ?? parsed.structured_content;
+      if (structured != null) pieces.push(formatReadableValue(structured));
+      if (parsed.isError || parsed.is_error) pieces.push("isError: true");
+      if (parsed.error) pieces.push(formatReadableValue(parsed.error));
+      return pieces.length ? pieces.join("\n\n") : parsed;
+    }
+
+    function textFromContentItems(items) {
+      if (!Array.isArray(items)) return "";
+      return items.map((item) => {
+        if (!item || typeof item !== "object") return String(item ?? "");
+        if (item.type === "text" || item.type === "input_text") return item.text || "";
+        if (item.text) return item.text;
+        if (item.content) return textFromOutput(item.content);
+        if (item.type === "image" || item.type === "input_image") return item.image_url ? `[image] ${item.image_url}` : "[image]";
+        if (item.type === "resource") return item.resource ? formatReadableValue(item.resource) : "[resource]";
+        if (item.type === "encrypted_content") return "[encrypted content]";
+        return formatReadableValue(item);
+      }).filter(Boolean).join("\n");
+    }
+
+    function formatReadableValue(value) {
+      const parsed = parseMaybeJson(value);
+      if (parsed && typeof parsed === "object") return redact(parsed);
+      return redact(String(parsed == null ? "" : parsed));
+    }
+
+    function renderStructuredSection(section) {
+      return `
+        <article class="structured-card">
+          <h3>${highlightMatches(section.title)}</h3>
+          <div class="structured-body${section.mono ? " mono" : ""}">${highlightMatches(section.body || "-")}</div>
+          ${section.meta ? `<div class="structured-meta">${highlightMatches(section.meta)}</div>` : ""}
+        </article>
+      `;
+    }
+
+    function structuredUserMessageSections(text) {
+      const blocks = extractTaggedBlocks(text);
+      const sections = [];
+      const environmentBlock = blocks.find((block) => normalizeBlockName(block.name) === "environment_context");
+      const request = cleanupUserVisibleText(text, blocks);
+      if (request) {
+        sections.push({
+          title: "用户真实输入 / 需求",
+          body: compact(request, 1400),
+        });
+      }
+      if (environmentBlock) {
+        sections.push({
+          title: "运行环境上下文 environment_context",
+          body: formatKnownFields(environmentBlock.body, [
+            "cwd",
+            "shell",
+            "current_date",
+            "timezone",
+          ]) || compact(environmentBlock.body, 1000),
+          mono: true,
+        });
+      }
+      const fileMentions = extractFileMentions(text);
+      if (fileMentions.length) {
+        sections.push({
+          title: "用户附带的文件 / 图片",
+          body: fileMentions.join("\n"),
+          mono: true,
+        });
+      }
+      const otherBlocks = blocks
+        .filter((block) => block !== environmentBlock)
+        .map((block) => `${block.name}: ${compact(block.body, 220)}`);
+      if (otherBlocks.length) {
+        sections.push({
+          title: "其他注入块",
+          body: otherBlocks.join("\n\n"),
+        });
+      }
+      return sections;
+    }
+
+    function structuredDeveloperMessageSections(text) {
+      const blocks = extractTaggedBlocks(text);
+      const sections = [];
+      const blockSummaries = blocks.map((block) => developerBlockSummary(block)).filter(Boolean);
+      if (blockSummaries.length) sections.push(...blockSummaries);
+
+      const headings = extractMarkdownHeadings(text);
+      if (headings.length) {
+        sections.push({
+          title: "Markdown 指令结构",
+          body: headings.slice(0, 40).join("\n"),
+          mono: true,
+          meta: headings.length > 40 ? `仅展示前 40 个标题，共 ${headings.length} 个` : "",
+        });
+      }
+
+      const importantLines = extractImportantDeveloperLines(text);
+      if (importantLines.length) {
+        sections.push({
+          title: "关键约束线索",
+          body: importantLines.slice(0, 24).join("\n"),
+          mono: true,
+          meta: importantLines.length > 24 ? `仅展示前 24 条，共 ${importantLines.length} 条` : "",
+        });
+      }
+
+      if (!sections.length) {
+        sections.push({
+          title: "developer 文本摘要",
+          body: compact(text, 1600),
+        });
+      }
+      return sections;
+    }
+
+    function extractTaggedBlocks(text) {
+      const blocks = [];
+      const re = /<([A-Za-z][^>\n]*?)>([\s\S]*?)<\/\1>/g;
+      let match;
+      while ((match = re.exec(text)) !== null) {
+        blocks.push({
+          name: match[1].trim(),
+          body: match[2].trim(),
+          full: match[0],
+        });
+      }
+      return blocks;
+    }
+
+    function normalizeBlockName(name) {
+      return String(name || "").toLowerCase().replace(/\s+/g, "_");
+    }
+
+    function cleanupUserVisibleText(text, blocks) {
+      let value = text;
+      blocks.forEach((block) => {
+        value = value.replace(block.full, "\n");
+      });
+      value = value
+        .replace(/# Files mentioned by the user:[\s\S]*?(?=\n\S|$)/g, "\n")
+        .replace(/<image\b[\s\S]*?<\/image>/g, "\n")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+      return value;
+    }
+
+    function extractFileMentions(text) {
+      const mentions = [];
+      text.split(/\r?\n/).forEach((line) => {
+        const trimmed = line.trim();
+        if (/^## .+:\s+\/.+/.test(trimmed)) mentions.push(trimmed.replace(/^##\s*/, ""));
+        const pathMatch = trimmed.match(/path="([^"]+)"/);
+        if (pathMatch) mentions.push(pathMatch[1]);
+      });
+      return [...new Set(mentions)];
+    }
+
+    function extractMarkdownHeadings(text) {
+      return text
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => /^#{1,4}\s+\S/.test(line));
+    }
+
+    function extractImportantDeveloperLines(text) {
+      const patterns = [
+        /sandbox/i,
+        /approval/i,
+        /permission/i,
+        /writable/i,
+        /network/i,
+        /tool/i,
+        /mcp/i,
+        /skill/i,
+        /model/i,
+        /collaboration/i,
+      ];
+      return text
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line && patterns.some((pattern) => pattern.test(line)))
+        .map((line) => compact(line, 240));
+    }
+
+    function developerBlockSummary(block) {
+      const name = normalizeBlockName(block.name);
+      if (name === "permissions_instructions") {
+        return {
+          title: "权限 / 沙箱指令",
+          body: [
+            findLine(block.body, /sandbox_mode|sandbox mode/i),
+            findLine(block.body, /network access/i),
+            findLine(block.body, /approval policy/i),
+            findLine(block.body, /writable roots/i),
+          ].filter(Boolean).join("\n") || compact(block.body, 900),
+          mono: true,
+        };
+      }
+      if (name === "skills_instructions") {
+        const skillCount = (block.body.match(/^- .+?:/gm) || []).length;
+        const roots = (block.body.match(/^- `r\d+` = .+/gm) || []).slice(0, 8);
+        const available = (block.body.match(/^- [a-zA-Z0-9:_-]+: .+/gm) || []).slice(0, 16);
+        return {
+          title: "Skills 注入说明",
+          body: [
+            `可用 skill 数量: ${skillCount || "-"}`,
+            roots.length ? `Skill roots:\n${roots.join("\n")}` : "",
+            available.length ? `可见 skill 示例:\n${available.join("\n")}` : "",
+          ].filter(Boolean).join("\n\n") || compact(block.body, 1200),
+          mono: true,
+          meta: skillCount > available.length ? `仅展示前 ${available.length} 个 skill 示例` : "",
+        };
+      }
+      if (name === "app-context") {
+        return {
+          title: "Codex App 上下文能力",
+          body: extractMarkdownHeadings(block.body).slice(0, 20).join("\n") || compact(block.body, 1000),
+          mono: true,
+        };
+      }
+      if (name === "plugins_instructions") {
+        return {
+          title: "Plugins 指令",
+          body: compact(block.body, 1000),
+        };
+      }
+      if (name === "collaboration_mode") {
+        return {
+          title: "协作模式",
+          body: compact(block.body, 1000),
+        };
+      }
+      return {
+        title: `指令块: ${block.name}`,
+        body: compact(block.body, 900),
+      };
+    }
+
+    function findLine(text, pattern) {
+      return text.split(/\r?\n/).map((line) => line.trim()).find((line) => pattern.test(line)) || "";
+    }
+
+    function formatKnownFields(text, fields) {
+      return fields
+        .map((field) => {
+          const match = text.match(new RegExp(`<${field}>([\\s\\S]*?)<\\/${field}>`));
+          return match ? `${field}: ${match[1].trim()}` : "";
+        })
+        .filter(Boolean)
+        .join("\n");
+    }
+
+    function tokenUsagePanel(event) {
+      if (event.eventType !== "token_count") return "";
+      const info = event.payload.info || {};
+      const total = info.total_token_usage || {};
+      const last = info.last_token_usage || {};
+      const contextWindow = info.model_context_window;
+      const rows = [
+        ["total.input_tokens", total.input_tokens, "当前记录点累计的输入 token。包含系统/开发者提示、用户消息、历史上下文、工具返回、工具 schema 等被纳入模型输入的内容。"],
+        ["total.cached_input_tokens", total.cached_input_tokens, "累计输入 token 中命中缓存的部分。它属于输入上下文，但通常代表可复用前缀，不等同于某个具体上行事件。"],
+        ["total.output_tokens", total.output_tokens, "当前记录点累计的模型可见输出 token，例如助手消息或工具调用参数等模型生成内容。"],
+        ["total.reasoning_output_tokens", total.reasoning_output_tokens, "当前记录点累计的模型内部 reasoning token。具体推理内容通常不会明文展示。"],
+        ["total.total_tokens", total.total_tokens, "累计总 token，通常约等于 input + output + reasoning。"],
+        ["last.input_tokens", last.input_tokens, "最近一次模型调用的输入 token。可粗略理解为该次请求的整体上行上下文大小，但不能拆到单个 event。"],
+        ["last.cached_input_tokens", last.cached_input_tokens, "最近一次模型调用中命中缓存的输入 token。"],
+        ["last.output_tokens", last.output_tokens, "最近一次模型调用生成的可见输出 token。"],
+        ["last.reasoning_output_tokens", last.reasoning_output_tokens, "最近一次模型调用的 reasoning token。"],
+        ["last.total_tokens", last.total_tokens, "最近一次模型调用的总 token。"],
+        ["model_context_window", contextWindow, "模型上下文窗口上限。它表示本模型最多可容纳的上下文规模，不代表本次实际消耗。"],
+      ];
+      return `
+        <div class="section">
+          <h2>Token Usage</h2>
+          <div class="notice">
+            这部分是模型调用级别的汇总，不能精确拆成每个上行/下行 event 的 token。input_tokens 是整次请求的输入上下文总量，output_tokens 是整次模型生成量。
+          </div>
+          <div class="token-grid">
+            ${rows.map(([label, value, help]) => `
+              <div class="token-card">
+                <strong>${escapeHtml(label)}</strong>
+                <div class="token-value">${escapeHtml(value == null ? "-" : String(value))}</div>
+                <span>${escapeHtml(help)}</span>
+              </div>
+            `).join("")}
+          </div>
+        </div>
+      `;
+    }
+
+    function turnContextPanel(event) {
+      if (event.eventType !== "turn_context") return "";
+      const payload = event.payload || {};
+      const sandbox = payload.sandbox_policy || payload.file_system_sandbox_policy || {};
+      const permission = payload.permission_profile || {};
+      const collaboration = payload.collaboration_mode || {};
+      const compactValue = (value) => {
+        if (Array.isArray(value)) return value.join("\n");
+        if (value && typeof value === "object") return JSON.stringify(value, null, 2);
+        if (value == null || value === "") return "-";
+        return String(value);
+      };
+      const rows = [
+        ["工作目录 cwd", payload.cwd, "相对路径读写、shell 命令默认都会以这里为基准。"],
+        ["工作区 workspace_roots", payload.workspace_roots, "模型主要可见和可写的项目范围。排查为什么能/不能访问某些文件时优先看这里。"],
+        ["时间 current_date / timezone", [payload.current_date, payload.timezone].filter(Boolean).join(" / "), "模型解释“今天、昨天、本周、最近”等相对时间时依赖这组信息。"],
+        ["权限 approval / sandbox / network", [
+          `approval: ${payload.approval_policy || "-"}`,
+          `sandbox: ${sandbox.type || "-"}`,
+          `network: ${sandbox.network_access == null ? "-" : sandbox.network_access}`,
+          `permission: ${permission.type || "-"}`,
+        ].join("\n"), "决定命令是否需要审批、文件能否写入、网络是否可用，是影响执行差异的核心字段。"],
+        ["模型 model", payload.model, "当前轮使用的模型。模型差异会影响工具选择、网页读取策略、上下文处理和响应速度。"],
+        ["协作模式 collaboration_mode", collaboration.mode, "影响 agent 是偏向直接执行、先规划，还是更多向用户确认。"],
+      ];
+      return `
+        <div class="section">
+          <h2>Turn Context</h2>
+          <div class="notice">
+            turn_context 是这一轮开始时注入给模型的环境快照。这里只展示最影响执行行为的字段；完整原始数据仍在下方 JSON 中。
+          </div>
+          <div class="context-grid">
+            ${rows.map(([label, value, help]) => `
+              <div class="context-card">
+                <strong>${escapeHtml(label)}</strong>
+                <div class="context-value">${escapeHtml(compactValue(value))}</div>
+                <span>${escapeHtml(help)}</span>
+              </div>
+            `).join("")}
+          </div>
+        </div>
+      `;
+    }
+
+    function patchInputPanel(event) {
+      if (event.eventType !== "custom_tool_call") return "";
+      const input = String(event.payload.input || "");
+      const name = String(event.payload.name || event.payload.tool_name || event.title || "");
+      const looksLikePatch = /apply_patch|patch_apply/i.test(name) || /^\*\*\* Begin Patch/m.test(input);
+      if (!looksLikePatch) return "";
+
+      const patch = parsePatchInput(input);
+      if (!patch.files.length) {
+        return `
+          <div class="section">
+            <h2>Patch Changes</h2>
+            <div class="notice">未从 input 中解析到文件级变更，请查看下方原始 payload。</div>
+          </div>
+        `;
+      }
+      const totals = patch.files.reduce((acc, file) => {
+        acc.added += file.added;
+        acc.deleted += file.deleted;
+        acc[file.kind] = (acc[file.kind] || 0) + 1;
+        return acc;
+      }, { added: 0, deleted: 0 });
+      const summary = [
+        `${patch.files.length} 个文件`,
+        totals["新增文件"] ? `${totals["新增文件"]} 新增` : "",
+        totals["更新文件"] ? `${totals["更新文件"]} 更新` : "",
+        totals["删除文件"] ? `${totals["删除文件"]} 删除` : "",
+        `+${totals.added}`,
+        `-${totals.deleted}`,
+      ].filter(Boolean);
+
+      return `
+        <div class="section">
+          <h2>Patch Changes</h2>
+          <div class="patch-summary">
+            ${summary.map((item) => `<span class="patch-pill">${escapeHtml(item)}</span>`).join("")}
+          </div>
+          ${patch.files.map(renderPatchFile).join("")}
+        </div>
+      `;
+    }
+
+    function parsePatchInput(input) {
+      const files = [];
+      let current = null;
+      let hunk = null;
+
+      function startFile(kind, file) {
+        current = { kind, file, moveTo: "", hunks: [], added: 0, deleted: 0 };
+        files.push(current);
+        hunk = null;
+      }
+
+      function ensureHunk(title) {
+        if (!current) return null;
+        if (!hunk || title) {
+          hunk = { title: title || "变更内容", lines: [] };
+          current.hunks.push(hunk);
+        }
+        return hunk;
+      }
+
+      input.split(/\r?\n/).forEach((line) => {
+        let match = line.match(/^\*\*\* Add File:\s+(.+)$/);
+        if (match) {
+          startFile("新增文件", match[1]);
+          return;
+        }
+        match = line.match(/^\*\*\* Update File:\s+(.+)$/);
+        if (match) {
+          startFile("更新文件", match[1]);
+          return;
+        }
+        match = line.match(/^\*\*\* Delete File:\s+(.+)$/);
+        if (match) {
+          startFile("删除文件", match[1]);
+          return;
+        }
+        match = line.match(/^\*\*\* Move to:\s+(.+)$/);
+        if (match && current) {
+          current.moveTo = match[1];
+          return;
+        }
+        if (/^\*\*\* (Begin Patch|End Patch)$/.test(line)) return;
+        if (!current) return;
+        if (line.startsWith("@@")) {
+          ensureHunk(line);
+          return;
+        }
+        const target = ensureHunk("");
+        if (!target) return;
+        if (line.startsWith("+")) {
+          current.added += 1;
+          target.lines.push({ type: "add", marker: "+", text: line.slice(1) });
+          return;
+        }
+        if (line.startsWith("-")) {
+          current.deleted += 1;
+          target.lines.push({ type: "del", marker: "-", text: line.slice(1) });
+          return;
+        }
+        target.lines.push({ type: line.trim() ? "context" : "meta", marker: " ", text: line });
+      });
+
+      return { files };
+    }
+
+    function renderPatchFile(file) {
+      const displayName = file.moveTo ? `${file.file} -> ${file.moveTo}` : file.file;
+      const hunks = file.hunks.length ? file.hunks : [{ title: "变更内容", lines: [] }];
+      return `
+        <article class="patch-file">
+          <div class="patch-file-head">
+            <span class="patch-kind">${escapeHtml(file.kind)}</span>
+            <strong class="patch-file-name">${escapeHtml(displayName)}</strong>
+            <span class="patch-count">+${file.added} -${file.deleted}</span>
+          </div>
+          ${hunks.map((hunk) => `
+            <div class="patch-hunk-title">${escapeHtml(hunk.title)}</div>
+            <div class="patch-lines">
+              ${hunk.lines.length ? hunk.lines.map(renderPatchLine).join("") : '<div class="patch-line meta"><span></span><span>无行级内容</span></div>'}
+            </div>
+          `).join("")}
+        </article>
+      `;
+    }
+
+    function renderPatchLine(line) {
+      return `
+        <div class="patch-line ${escapeHtml(line.type)}">
+          <span>${escapeHtml(line.marker)}</span>
+          <span>${escapeHtml(line.text)}</span>
+        </div>
+      `;
+    }
+
+    function flowKind(event) {
+      const direction = eventDirection(event);
+      if (/返回给模型|用户提交|user 角色|developer 角色|system 角色|执行上下文/.test(direction)) return "upstream";
+      if (/模型下发|模型输出|assistant 上下文|模型推理|模型上下文项/.test(direction)) return "downstream";
+      if (/运行状态|持久化|历史修正|多 agent/.test(direction)) return "runtime";
+      return "mixed";
+    }
+
+    function flowLabel(kind) {
+      if (kind === "upstream") return "上行";
+      if (kind === "downstream") return "下行";
+      if (kind === "runtime") return "运行状态";
+      return "混合/未知";
+    }
+
+    function annotateEvents(events) {
+      const indexes = {
+        function: { inputs: new Map(), outputs: new Map() },
+        custom: { inputs: new Map(), outputs: new Map() },
+        mcp: { inputs: new Map(), outputs: new Map() },
+      };
+      const anyInputs = new Map();
+      const anyOutputs = new Map();
+      events.forEach((event) => {
+        const kind = toolCallKind(event);
+        const phase = toolCallPhase(event);
+        if (!event.callId || !kind) return;
+        if (phase === "input") {
+          if (!indexes[kind].inputs.has(event.callId)) indexes[kind].inputs.set(event.callId, event);
+          if (!anyInputs.has(event.callId)) anyInputs.set(event.callId, event);
+          return;
+        }
+        if (phase === "output" || phase === "complete") {
+          if (!indexes[kind].outputs.has(event.callId)) indexes[kind].outputs.set(event.callId, event);
+          if (!anyOutputs.has(event.callId)) anyOutputs.set(event.callId, event);
+        }
+      });
+      events.forEach((event) => {
+        const pair = pairForToolCall(event, indexes, anyInputs, anyOutputs);
+        event.pairId = pair?.id || "";
+        event.pairLine = pair?.lineNumber || null;
+        event.pairTitle = pair?.title || "";
+        event.pairPreview = pair?.preview || "";
+        event.flowKind = flowKind(event);
+        event.flowLabel = flowLabel(event.flowKind);
+      });
+    }
+
+    function pairForToolCall(event, indexes, anyInputs, anyOutputs) {
+      const kind = toolCallKind(event);
+      const phase = toolCallPhase(event);
+      if (!event.callId || !kind || !phase) return null;
+      if (phase === "input") {
+        if (indexes[kind].outputs.has(event.callId)) return indexes[kind].outputs.get(event.callId);
+        return anyOutputs.get(event.callId) || null;
+      }
+      if (phase === "output" || phase === "complete") {
+        if (indexes[kind].inputs.has(event.callId)) return indexes[kind].inputs.get(event.callId);
+        return anyInputs.get(event.callId) || null;
+      }
+      return null;
+    }
+
+    function redact(value) {
+      if (value == null) return value;
+      let text = typeof value === "string" ? value : JSON.stringify(value, null, 2);
+      text = text.replace(/(x-jwt-token=)[^&\s"']+/gi, "$1[REDACTED]");
+      text = text.replace(/(authorization:\s*bearer\s+)[^\s"']+/gi, "$1[REDACTED]");
+      text = text.replace(/(access[_-]?token["']?\s*[:=]\s*["']?)[^"',\s&]+/gi, "$1[REDACTED]");
+      text = text.replace(/(refresh[_-]?token["']?\s*[:=]\s*["']?)[^"',\s&]+/gi, "$1[REDACTED]");
+      text = text.replace(/(token["']?\s*[:=]\s*["']?)[A-Za-z0-9._~+/=-]{16,}/gi, "$1[REDACTED]");
+      text = text.replace(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, "[JWT_REDACTED]");
+      text = text.replace(/([A-Za-z0-9._%+-]+)@([A-Za-z0-9.-]+\.[A-Za-z]{2,})/g, "[EMAIL_REDACTED]");
+      return text;
+    }
+
+    function parseMaybeJson(value) {
+      if (typeof value !== "string") return value;
+      try {
+        return JSON.parse(value);
+      } catch (_) {
+        return value;
+      }
+    }
+
+    function textFromOutput(output) {
+      if (output == null) return "";
+      if (typeof output === "string") return output;
+      if (Array.isArray(output)) {
+        return output.map((item) => {
+          if (item && typeof item === "object") return item.text || item.content || JSON.stringify(item);
+          return String(item);
+        }).join("\n");
+      }
+      return JSON.stringify(output);
+    }
+
+    function getPayloadText(payload) {
+      const pieces = [
+        payload.name,
+        payload.call_id,
+        payload.id,
+        payload.type,
+        payload.arguments,
+        payload.input,
+        payload.output,
+        payload.action,
+        payload.message,
+      ];
+      if (payload.content) pieces.push(payload.content);
+      return pieces.map(textFromOutput).join("\n");
+    }
+
+    function summarizePayload(payload) {
+      if (!payload) return "";
+      if (payload.type === "function_call") {
+        const args = parseMaybeJson(payload.arguments);
+        return summarizeArgs(args);
+      }
+      if (payload.type === "custom_tool_call") {
+        return payload.input || "";
+      }
+      if (payload.type === "function_call_output" || payload.type === "custom_tool_call_output") {
+        return textFromOutput(extractFunctionOutput(payload.output));
+      }
+      if (payload.type === "mcp_tool_call_end" || payload.type === "mcp_tool_call_output") {
+        return textFromOutput(extractMcpOutput(payload));
+      }
+      if (payload.type === "mcp_tool_call_begin" || payload.type === "mcp_tool_call") {
+        const invocation = payload.invocation || payload;
+        return [
+          invocation.server,
+          invocation.tool,
+          textFromOutput(invocation.arguments ?? payload.arguments ?? ""),
+          textFromOutput(payload.result || payload.error || ""),
+        ].filter(Boolean).join("\n");
+      }
+      if (payload.type === "web_search_call") {
+        return payload.action ? JSON.stringify(payload.action) : "";
+      }
+      if (payload.type === "message" || payload.type === "agent_message") {
+        return textFromOutput(payload.message || payload.content);
+      }
+      if (payload.type === "reasoning") {
+        return payload.summary && payload.summary.length ? JSON.stringify(payload.summary) : "[encrypted reasoning]";
+      }
+      return JSON.stringify(payload);
+    }
+
+    function summarizeArgs(args) {
+      if (!args || typeof args !== "object") return String(args || "");
+      return args.cmd || args.code || args.query || args.id || args.ref_id || args.path || JSON.stringify(args);
+    }
+
+    function normalizeEvent(record, lineNumber) {
+      const payload = record.payload || {};
+      const eventType = payload.type || record.type || "unknown";
+      const title = payload.name || payload.role || payload.type || record.type || "event";
+      const callId = payload.call_id || payload.id || payload.item?.id || payload.item?.call_id || "";
+      const rawSummary = summarizePayload(payload);
+      const redactedSummary = redact(rawSummary);
+      return {
+        id: `${lineNumber}:${eventType}:${callId || title}`,
+        lineNumber,
+        timestamp: record.timestamp || "",
+        recordType: record.type || "",
+        eventType,
+        title,
+        callId,
+        payload,
+        record,
+        fullPreview: redactedSummary,
+        preview: compact(redactedSummary, 600),
+        searchText: [
+          record.timestamp,
+          record.type,
+          eventType,
+          title,
+          callId,
+          redactedSummary,
+        ].join("\n").toLowerCase(),
+      };
+    }
+
+    function userMessageSummary(event) {
+      if (event.eventType === "user_message") {
+        return compact(textFromOutput(event.payload.message || event.payload.content), 120);
+      }
+      if (event.eventType === "message" && event.payload.role === "user") {
+        const text = textFromOutput(event.payload.message || event.payload.content);
+        if (!isInjectedUserContext(text)) return compact(text, 120);
+      }
+      return "";
+    }
+
+    function isInjectedUserContext(text) {
+      const value = String(text || "").trim();
+      return value.startsWith("<environment_context>") ||
+        value.startsWith("<user_info>") ||
+        value.startsWith("<files>") ||
+        /<cwd>[\s\S]*<\/cwd>/.test(value) ||
+        /<current_date>[\s\S]*<\/current_date>/.test(value);
+    }
+
+    function annotateTurns(events) {
+      const taskStarts = events
+        .map((event, index) => ({ event, index }))
+        .filter((item) => item.event.eventType === "task_started");
+
+      if (!taskStarts.length) {
+        let turnCounter = 0;
+        let currentTurn = { key: "setup", index: "Setup", summary: "Session setup and injected context" };
+
+        events.forEach((event) => {
+          if (event.eventType === "user_message") {
+            turnCounter += 1;
+            currentTurn = {
+              key: `turn:${turnCounter}:line:${event.lineNumber}`,
+              index: turnCounter,
+              summary: userMessageSummary(event),
+            };
+          }
+          event.turnKey = currentTurn.key;
+          event.turnIndex = currentTurn.index;
+          event.turnSummary = currentTurn.summary;
+        });
+        return;
+      }
+
+      taskStarts.forEach((start, taskIndex) => {
+        const nextStart = taskStarts[taskIndex + 1]?.index ?? events.length;
+        const turnEvents = events.slice(start.index, nextStart);
+        const userSummary = turnEvents.map(userMessageSummary).find(Boolean);
+        const turnId = start.event.payload.turn_id || start.event.record.turn_id || "";
+        const turn = {
+          key: `task:${taskIndex + 1}:line:${start.event.lineNumber}:${turnId}`,
+          index: taskIndex + 1,
+          summary: userSummary || `task_started${turnId ? `: ${turnId}` : ""}`,
+        };
+        turnEvents.forEach((event) => {
+          event.turnKey = turn.key;
+          event.turnIndex = turn.index;
+          event.turnSummary = turn.summary;
+        });
+      });
+
+      events.slice(0, taskStarts[0].index).forEach((event) => {
+        event.turnKey = "setup";
+        event.turnIndex = "Setup";
+        event.turnSummary = "Session setup before first task_started";
+      });
+    }
+
+    function compact(text, maxLen) {
+      const value = String(text || "").replace(/\n{3,}/g, "\n\n").trim();
+      return value.length > maxLen ? value.slice(0, maxLen) + "\n..." : value;
+    }
+
+    function eventBadgeClass(event) {
+      if (/output/i.test(event.eventType)) return "output";
+      if (/call/i.test(event.eventType)) return "tool";
+      if (/message|agent/i.test(event.eventType)) return "msg";
+      if (/reasoning/i.test(event.eventType)) return "reasoning";
+      if (/error|failed/i.test(event.searchText)) return "error";
+      return "";
+    }
+
+    function formatTime(ts) {
+      if (!ts) return "";
+      const date = new Date(ts);
+      if (Number.isNaN(date.getTime())) return ts;
+      return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    }
+
+    function parseJsonl(text) {
+      const lines = text.split(/\r?\n/);
+      const events = [];
+      const errors = [];
+      lines.forEach((line, index) => {
+        if (!line.trim()) return;
+        try {
+          events.push(normalizeEvent(JSON.parse(line), index + 1));
+        } catch (error) {
+          errors.push({ line: index + 1, error: error.message });
+        }
+      });
+      annotateTurns(events);
+      annotateEvents(events);
+      return { lines, events, errors };
+    }
+
+    function computeMetrics(events) {
+      const counts = countBy(events, (event) => event.eventType);
+      const calls = events.filter((event) => /call$/i.test(event.eventType) && !event.eventType.includes("output"));
+      const outputs = events.filter((event) => event.eventType.includes("output"));
+      const started = events.find((event) => event.searchText.includes("task_started"));
+      const completed = [...events].reverse().find((event) => event.searchText.includes("task_complete"));
+      let duration = "";
+      const completePayload = completed?.payload || {};
+      if (completePayload.duration_ms) duration = `${Math.round(completePayload.duration_ms / 1000)}s`;
+      return {
+        counts,
+        calls,
+        outputs,
+        started,
+        completed,
+        duration,
+      };
+    }
+
+    function countBy(items, getKey) {
+      const map = new Map();
+      items.forEach((item) => {
+        const key = getKey(item) || "unknown";
+        map.set(key, (map.get(key) || 0) + 1);
+      });
+      return map;
+    }
+
+    function renderAll() {
+      renderKindFilter();
+      applyFilters();
+      syncSelectedEventWithFilter();
+      renderSidebar();
+      renderTimeline();
+      renderDetails();
+    }
+
+    function syncSelectedEventWithFilter() {
+      if (!state.events.length) {
+        state.selectedId = null;
+        return;
+      }
+      if (!state.filtered.length) {
+        state.selectedId = null;
+        return;
+      }
+      if (!state.filtered.some((event) => event.id === state.selectedId)) {
+        state.selectedId = state.filtered[0].id;
+      }
+    }
+
+    function renderKindFilter() {
+      const previous = el.kindFilter.value;
+      const types = [...new Set(state.events.map((event) => event.eventType))].sort();
+      el.kindFilter.innerHTML = '<option value="all">All event types</option>' +
+        types.map((type) => `<option value="${escapeHtml(type)}">${escapeHtml(type)}</option>`).join("");
+      if (types.includes(previous)) el.kindFilter.value = previous;
+    }
+
+    function groupTurns(events) {
+      const groups = [];
+      events.forEach((event) => {
+        const last = groups[groups.length - 1];
+        if (last && last.key === event.turnKey) {
+          last.events.push(event);
+          return;
+        }
+        groups.push({
+          key: event.turnKey,
+          index: event.turnIndex,
+          summary: event.turnSummary,
+          events: [event],
+        });
+      });
+      return groups;
+    }
+
+    function tokenUsageFromEvent(event, scope) {
+      const usage = event?.payload?.info?.[scope] || null;
+      if (!usage) return null;
+      return {
+        input: Number(usage.input_tokens) || 0,
+        cachedInput: Number(usage.cached_input_tokens) || 0,
+        output: Number(usage.output_tokens) || 0,
+        reasoning: Number(usage.reasoning_output_tokens) || 0,
+        total: Number(usage.total_tokens) || 0,
+      };
+    }
+
+    function diffUsage(current, previous) {
+      if (!current) return null;
+      if (!previous) return { ...current };
+      return {
+        input: Math.max(0, current.input - previous.input),
+        cachedInput: Math.max(0, current.cachedInput - previous.cachedInput),
+        output: Math.max(0, current.output - previous.output),
+        reasoning: Math.max(0, current.reasoning - previous.reasoning),
+        total: Math.max(0, current.total - previous.total),
+      };
+    }
+
+    function sumUsage(usages) {
+      return usages.reduce((acc, usage) => {
+        if (!usage) return acc;
+        acc.input += usage.input;
+        acc.cachedInput += usage.cachedInput;
+        acc.output += usage.output;
+        acc.reasoning += usage.reasoning;
+        acc.total += usage.total;
+        return acc;
+      }, { input: 0, cachedInput: 0, output: 0, reasoning: 0, total: 0 });
+    }
+
+    function currentSessionTotalTokens(events) {
+      const totals = events
+        .filter((event) => event.eventType === "token_count")
+        .map((event) => tokenUsageFromEvent(event, "total_token_usage"))
+        .filter(Boolean);
+      return totals.length ? totals[totals.length - 1].total : 0;
+    }
+
+    function formatBytes(bytes) {
+      const value = Number(bytes) || 0;
+      if (value >= 1024 * 1024) return `${(value / 1024 / 1024).toFixed(1)}MB`;
+      if (value >= 1024) return `${(value / 1024).toFixed(1)}KB`;
+      return `${value}B`;
+    }
+
+    function computeTurnTokenStats(events) {
+      const stats = new Map();
+      let previousTotal = null;
+      groupTurns(events).forEach((group) => {
+        const tokenEvents = group.events.filter((event) => event.eventType === "token_count");
+        const totals = tokenEvents.map((event) => tokenUsageFromEvent(event, "total_token_usage")).filter(Boolean);
+        const lastUsages = tokenEvents.map((event) => tokenUsageFromEvent(event, "last_token_usage")).filter(Boolean);
+        if (totals.length) {
+          const lastTotal = totals[totals.length - 1];
+          stats.set(group.key, {
+            ...diffUsage(lastTotal, previousTotal),
+            source: previousTotal ? "total delta" : "total",
+            tokenCountEvents: tokenEvents.length,
+          });
+          previousTotal = lastTotal;
+          return;
+        }
+        if (lastUsages.length) {
+          stats.set(group.key, {
+            ...sumUsage(lastUsages),
+            source: "last sum",
+            tokenCountEvents: tokenEvents.length,
+          });
+        }
+      });
+      return stats;
+    }
+
+    function computeTurnDurationStats(events) {
+      const stats = new Map();
+      groupTurns(events).forEach((group) => {
+        const complete = [...group.events].reverse()
+          .find((event) => event.eventType === "task_complete" || event.eventType === "turn_complete");
+        const durationMs = Number(complete?.payload?.duration_ms);
+        if (Number.isFinite(durationMs) && durationMs >= 0) {
+          stats.set(group.key, {
+            ms: durationMs,
+            source: "task_complete.duration_ms",
+            startLine: group.events[0]?.lineNumber || null,
+            endLine: complete.lineNumber,
+          });
+          return;
+        }
+
+        const first = group.events.find((event) => event.timestamp);
+        const last = [...group.events].reverse().find((event) => event.timestamp);
+        const start = first ? new Date(first.timestamp).getTime() : NaN;
+        const end = last ? new Date(last.timestamp).getTime() : NaN;
+        if (Number.isFinite(start) && Number.isFinite(end) && end >= start && first !== last) {
+          stats.set(group.key, {
+            ms: end - start,
+            source: "event timestamp range",
+            startLine: first.lineNumber,
+            endLine: last.lineNumber,
+          });
+        }
+      });
+      return stats;
+    }
+
+    function formatTokenNumber(value) {
+      const number = Number(value) || 0;
+      if (number >= 1000000) return `${(number / 1000000).toFixed(1)}m`;
+      if (number >= 1000) return `${(number / 1000).toFixed(1)}k`;
+      return String(number);
+    }
+
+    function turnTokenLabel(stats) {
+      if (!stats) return "tokens -";
+      return `上行 ${formatTokenNumber(stats.input)} / 下行 ${formatTokenNumber(stats.output)}`;
+    }
+
+    function turnTokenTitle(stats) {
+      if (!stats) return "本轮没有 token_count 记录";
+      return [
+        `input_tokens: ${stats.input}`,
+        `output_tokens: ${stats.output}`,
+        `cached_input_tokens: ${stats.cachedInput}`,
+        `reasoning_output_tokens: ${stats.reasoning}`,
+        `source: ${stats.source}`,
+        `token_count events: ${stats.tokenCountEvents}`,
+      ].join("\n");
+    }
+
+    function formatDurationMs(ms) {
+      const value = Number(ms);
+      if (!Number.isFinite(value) || value < 0) return "-";
+      if (value < 1000) return `${Math.round(value)}ms`;
+      if (value < 10000) return `${(value / 1000).toFixed(2)}s`;
+      if (value < 60000) return `${(value / 1000).toFixed(1)}s`;
+      const totalSeconds = Math.round(value / 1000);
+      const minutes = Math.floor(totalSeconds / 60);
+      const seconds = totalSeconds % 60;
+      return `${minutes}m ${String(seconds).padStart(2, "0")}s`;
+    }
+
+    function turnDurationLabel(stats) {
+      return stats ? `耗时 ${formatDurationMs(stats.ms)}` : "耗时 -";
+    }
+
+    function turnDurationTitle(stats) {
+      if (!stats) return "本轮没有 task_complete.duration_ms，也无法用事件时间戳估算";
+      return [
+        `duration: ${formatDurationMs(stats.ms)} (${Math.round(stats.ms)}ms)`,
+        `source: ${stats.source}`,
+        `line range: ${stats.startLine || "-"} -> ${stats.endLine || "-"}`,
+      ].join("\n");
+    }
+
+    function applyFilters() {
+      const query = state.searchQuery.trim().toLowerCase();
+      const kind = el.kindFilter.value;
+      state.filtered = state.events.filter((event) => {
+        if (query && (event.eventType !== "message" || !messagePayloadSearchText(event).includes(query))) return false;
+        if (!query && kind !== "all" && event.eventType !== kind) return false;
+        return true;
+      });
+    }
+
+    function messagePayloadSearchText(event) {
+      return redact(event.payload || "").toLowerCase();
+    }
+
+    function renderSidebar() {
+      const metrics = computeMetrics(state.events);
+      const turnCount = state.events.length
+        ? groupTurns(state.events).filter((group) => group.key !== "setup").length
+        : 0;
+      el.metrics.innerHTML = [
+        metricHtml(turnCount, "会话"),
+        metricHtml(state.events.length, "events"),
+        metricHtml(formatBytes(state.sessionSize), "session大小"),
+        metricHtml(formatTokenNumber(currentSessionTotalTokens(state.events)), "总token"),
+      ].join("");
+      renderTurnIndex();
+      renderBars(el.typeBars, [...metrics.counts.entries()].sort((a, b) => b[1] - a[1]));
+      renderTypeGuide([...metrics.counts.entries()].sort((a, b) => b[1] - a[1]).map(([type]) => type));
+      const searchLabel = state.searchQuery ? " matching message payload search" : "";
+      el.status.textContent = state.events.length ? `${state.filtered.length} of ${state.events.length} events shown${searchLabel}` : "No session loaded";
+    }
+
+    function renderTurnIndex() {
+      if (!state.events.length) {
+        el.turnIndex.innerHTML = '<div class="notice">Load a session to see turns.</div>';
+        return;
+      }
+      const filteredCounts = countBy(state.filtered, (event) => event.turnKey);
+      const groups = groupTurns(state.events);
+      const tokenStats = computeTurnTokenStats(state.events);
+      const durationStats = computeTurnDurationStats(state.events);
+      el.turnIndex.innerHTML = groups.map((group) => {
+        const title = group.index === "Setup" ? "Session Setup" : `Turn ${group.index || "-"}`;
+        const filteredCount = filteredCounts.get(group.key) || 0;
+        const stats = tokenStats.get(group.key);
+        const duration = durationStats.get(group.key);
+        const disabled = filteredCount ? "" : " disabled";
+        return `
+          <button class="turn-link" type="button" data-turn-jump="${escapeHtml(group.key)}"${disabled}>
+            <strong>${escapeHtml(title)}</strong>
+            <span class="turn-hit-count">${filteredCount}/${group.events.length}</span>
+            <span>${escapeHtml(turnDurationLabel(duration))} · ${escapeHtml(turnTokenLabel(stats))} · ${escapeHtml(group.summary || "No user message summary available")}</span>
+          </button>
+        `;
+      }).join("");
+    }
+
+    function renderTypeGuide(types) {
+      if (!types.length) {
+        el.typeGuide.innerHTML = '<div class="notice">Load a session to see event explanations.</div>';
+        return;
+      }
+      el.typeGuide.innerHTML = types.map((type) => {
+        const doc = eventDoc(type);
+        return `
+          <div class="guide-card">
+            <strong>${escapeHtml(type)}</strong>
+            <span class="guide-meta">方向：${escapeHtml(doc.direction)}</span>
+            <span>${escapeHtml(doc.role)}</span>
+            <span>${escapeHtml(doc.watch)}</span>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function elapsed(first, last) {
+      const start = new Date(first).getTime();
+      const end = new Date(last).getTime();
+      if (!start || !end || Number.isNaN(start) || Number.isNaN(end) || end < start) return "";
+      return `${Math.round((end - start) / 1000)}s`;
+    }
+
+    function metricHtml(value, label) {
+      return `<div class="metric"><span class="value">${escapeHtml(String(value))}</span><span class="label">${escapeHtml(label)}</span></div>`;
+    }
+
+    function renderBars(container, entries) {
+      if (!entries.length) {
+        container.innerHTML = '<div class="notice">No matching entries.</div>';
+        return;
+      }
+      const max = Math.max(...entries.map(([, value]) => value));
+      container.innerHTML = entries.slice(0, 16).map(([label, value]) => {
+        const width = Math.max(4, Math.round((value / max) * 100));
+        return `
+          <div class="bar-row">
+            <div class="bar-track" title="${escapeHtml(label)}">
+              <div class="bar-fill" style="width:${width}%"></div>
+              <div class="bar-label">${escapeHtml(label)}</div>
+            </div>
+            <div>${value}</div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function renderTimeline() {
+      if (!state.events.length) {
+        el.timeline.innerHTML = `
+          <div class="empty">
+            <div><strong>Choose your <code>.codex</code> directory</strong><br>Then pick a session from <code>sessions/</code>.</div>
+          </div>`;
+        return;
+      }
+      if (!state.filtered.length) {
+        el.timeline.innerHTML = '<div class="empty">No events match the current filters.</div>';
+        return;
+      }
+      const groups = groupTurns(state.filtered);
+      const tokenStats = computeTurnTokenStats(state.events);
+      const durationStats = computeTurnDurationStats(state.events);
+
+      el.timeline.innerHTML = groups.map((group) => {
+        const collapsed = state.collapsedTurns.has(group.key);
+        const turnTitle = group.index === "Setup" ? "Session Setup" : `Turn ${group.index || "-"}`;
+        const stats = tokenStats.get(group.key);
+        const duration = durationStats.get(group.key);
+        const divider = `
+          <div class="turn-divider${collapsed ? " collapsed" : ""}" data-turn-key="${escapeHtml(group.key)}">
+            <button class="turn-toggle" type="button" data-turn-toggle="${escapeHtml(group.key)}" aria-expanded="${collapsed ? "false" : "true"}" title="${collapsed ? "Expand turn" : "Collapse turn"}">
+              <span class="turn-caret">${collapsed ? "+" : "-"}</span>
+              <strong>${escapeHtml(turnTitle)}</strong>
+            </button>
+            <div class="turn-meta">
+              <span class="turn-duration" title="${escapeHtml(turnDurationTitle(duration))}">${escapeHtml(turnDurationLabel(duration))}</span>
+              <span class="turn-token" title="${escapeHtml(turnTokenTitle(stats))}">${escapeHtml(turnTokenLabel(stats))}</span>
+              <span class="turn-count">${group.events.length} event${group.events.length === 1 ? "" : "s"}</span>
+            </div>
+            <span class="turn-summary">${escapeHtml(group.summary || "No user message summary available")}</span>
+          </div>
+        `;
+        if (collapsed) return divider;
+        return divider + group.events.map((event) => {
+        const selected = event.id === state.selectedId ? " selected" : "";
+        const badge = eventBadgeClass(event);
+        return `
+          <article class="event${selected}" data-id="${escapeHtml(event.id)}">
+            <div class="event-head">
+              <span class="badge ${badge}">${escapeHtml(event.eventType)}</span>
+              <span class="badge ${escapeHtml(event.flowKind || "mixed")}">${escapeHtml(event.flowLabel || "混合/未知")}</span>
+              <div class="event-title">
+                <strong>${escapeHtml(event.title)}</strong>
+                <span>${escapeHtml(event.callId || `line ${event.lineNumber}`)}${event.pairLine ? ` -> line ${event.pairLine}` : ""}</span>
+              </div>
+              <time class="event-time">${escapeHtml(formatTime(event.timestamp))}</time>
+            </div>
+            <div class="event-preview">${escapeHtml(event.preview)}</div>
+          </article>
+        `;
+        }).join("");
+      }).join("");
+    }
+
+    function renderDetails() {
+      const event = state.events.find((item) => item.id === state.selectedId);
+      if (!event) {
+        el.details.innerHTML = '<div class="empty">Select an event to inspect its redacted payload.</div>';
+        return;
+      }
+      const redactedRecord = redact(event.record);
+      const fullSummary = fullEventSummary(event);
+      const structuredMessagePanel = messageStructuredTextPanel(event);
+      const functionPanel = functionCallPanel(event);
+      const tokenPanel = tokenUsagePanel(event);
+      const contextPanel = turnContextPanel(event);
+      const patchPanel = patchInputPanel(event);
+      const detailRows = detailRowsForEvent(event);
+      el.details.innerHTML = `
+        <div class="detail-head">
+          <h2>${highlightMatches(event.title)}</h2>
+          <div class="detail-meta">
+            <span>event type: ${highlightMatches(event.eventType)}</span>
+            <span>record.type: ${highlightMatches(event.recordType || "-")}</span>
+            <span>payload.type: ${highlightMatches(event.payload.type || "-")}</span>
+            ${event.payload.role ? `<span>role: ${highlightMatches(event.payload.role)}</span>` : ""}
+            <span>turn: ${highlightMatches(event.turnIndex || "-")}</span>
+            <span>flow: ${highlightMatches(event.flowLabel || "混合/未知")}</span>
+            <span>time: ${highlightMatches(event.timestamp || "-")}</span>
+            <span>line: ${event.lineNumber}</span>
+            <span>call: ${highlightMatches(event.callId || "-")}</span>
+            <span>paired line: ${highlightMatches(event.pairLine || "-")}</span>
+            <span>full summary chars: ${fullSummary.length}</span>
+          </div>
+          <div class="notice">
+            ${renderDetailRows(detailRows)}
+          </div>
+        </div>
+        <div class="detail-actions">
+          <button class="small-button" id="copyEvent">Copy Event</button>
+          ${event.pairId ? '<button class="small-button jump-button" id="jumpPair">Jump to Paired Event</button>' : ""}
+          <span class="notice" id="copyStatus"></span>
+        </div>
+        ${structuredMessagePanel}
+        ${functionPanel}
+        ${tokenPanel}
+        ${contextPanel}
+        ${patchPanel}
+        <pre id="detailPre">${highlightMatches(redactedRecord)}</pre>
+      `;
+      document.getElementById("copyEvent").addEventListener("click", async () => {
+        await copyText(redactedRecord);
+        setCopyStatus(`Copied redacted event (${redactedRecord.length} chars)`);
+      });
+      const jumpPair = document.getElementById("jumpPair");
+      if (jumpPair) {
+        jumpPair.addEventListener("click", () => {
+          selectEventById(event.pairId, true);
+        });
+      }
+    }
+
+    function selectEventById(id, scrollToEvent = false) {
+      const targetEvent = state.events.find((event) => event.id === id);
+      if (!targetEvent) return;
+      state.selectedId = id;
+      if (scrollToEvent) state.collapsedTurns.delete(targetEvent.turnKey);
+      renderTimeline();
+      renderDetails();
+      if (!scrollToEvent) return;
+      requestAnimationFrame(() => {
+        const target = el.timeline.querySelector(`.event[data-id="${cssEscape(id)}"]`);
+        if (target) target.scrollIntoView({ block: "center", behavior: "smooth" });
+      });
+    }
+
+    function cssEscape(value) {
+      if (window.CSS?.escape) return CSS.escape(value);
+      return String(value).replace(/["\\]/g, "\\$&");
+    }
+
+    function fullEventSummary(event) {
+      return redact(summarizePayload(event.payload)) || "";
+    }
+
+    async function copyText(text) {
+      const value = String(text || "");
+      try {
+        await navigator.clipboard.writeText(value);
+        return true;
+      } catch (_) {
+        const textarea = document.createElement("textarea");
+        textarea.value = value;
+        textarea.setAttribute("readonly", "");
+        textarea.style.position = "fixed";
+        textarea.style.left = "-9999px";
+        document.body.appendChild(textarea);
+        textarea.select();
+        const ok = document.execCommand("copy");
+        textarea.remove();
+        return ok;
+      }
+    }
+
+    function setCopyStatus(message) {
+      const target = document.getElementById("copyStatus");
+      if (!target) return;
+      target.textContent = message;
+    }
+
+    function escapeHtml(value) {
+      return String(value == null ? "" : value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function highlightMatches(value, query = state.searchQuery) {
+      const text = String(value == null ? "" : value);
+      const needle = String(query || "").trim();
+      if (!needle) return escapeHtml(text);
+      const pattern = new RegExp(escapeRegExp(needle), "gi");
+      let cursor = 0;
+      let html = "";
+      for (const match of text.matchAll(pattern)) {
+        const index = match.index ?? 0;
+        html += escapeHtml(text.slice(cursor, index));
+        html += `<mark class="search-hit">${escapeHtml(match[0])}</mark>`;
+        cursor = index + match[0].length;
+      }
+      html += escapeHtml(text.slice(cursor));
+      return html;
+    }
+
+    function escapeRegExp(value) {
+      return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    }
+
+    function escapeRegExp(value) {
+      return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    }
+
+    function isSessionCandidate(name) {
+      return /\.(jsonl|json|txt)$/i.test(name || "");
+    }
+
+    const codexSessionDirectoryNames = ["sessions", "session"];
+
+    function isCodexSessionDirectoryName(name) {
+      return codexSessionDirectoryNames.includes(String(name || "").toLowerCase());
+    }
+
+    function isCodexSessionPath(path, fallbackName = "") {
+      const value = String(path || fallbackName || "");
+      if (!isSessionCandidate(value)) return false;
+      return /(^|\/)sessions?\//i.test(value) || (!path && isSessionCandidate(fallbackName));
+    }
+
+    async function loadLocatedSession(file, path) {
+      const text = await file.text();
+      state.sessionSize = file.size || 0;
+      await loadSessionText(text, path || file.name);
+      el.status.textContent = `${state.events.length} events loaded from ${path || file.name}`;
+    }
+
+    function catalogIdForSession(path, file) {
+      return `${path || file.name}:${file.size}:${file.lastModified}`;
+    }
+
+    function extractSessionIdFromPath(path) {
+      const value = shortSessionPath(path);
+      const uuid = value.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+      if (uuid) return uuid[0];
+      return value.replace(/\.(jsonl|json|txt)$/i, "") || "unknown";
+    }
+
+    function shortSessionPath(path) {
+      const value = String(path || "");
+      const match = value.match(/(?:^|\/)sessions?\/(.+)$/i);
+      return match ? match[1] : value;
+    }
+
+    function formatFileModified(value) {
+      const date = new Date(value);
+      if (!value || Number.isNaN(date.getTime())) return "unknown time";
+      const pad = (part) => String(part).padStart(2, "0");
+      return [
+        date.getFullYear(),
+        pad(date.getMonth() + 1),
+        pad(date.getDate()),
+      ].join("-") + " " + [pad(date.getHours()), pad(date.getMinutes())].join(":");
+    }
+
+    function parseSessionCatalogMeta(text, path, file) {
+      let sessionId = extractSessionIdFromPath(path);
+      let timestampMs = Number(file.lastModified) || Date.now();
+      let description = "";
+      let project = "";
+      let projectPath = "";
+
+      const lines = String(text || "").split(/\r?\n/).filter((line) => line.trim());
+      for (const line of lines) {
+        let record;
+        try {
+          record = JSON.parse(line);
+        } catch (_) {
+          continue;
+        }
+
+        const payload = record.payload || {};
+        if (record.timestamp && timestampMs === (Number(file.lastModified) || timestampMs)) {
+          const parsedTime = new Date(record.timestamp).getTime();
+          if (Number.isFinite(parsedTime)) timestampMs = parsedTime;
+        }
+
+        if (record.type === "session_meta" || payload.type === "session_meta") {
+          sessionId = payload.session_id || payload.id || record.session_id || record.id || sessionId;
+        }
+
+        const projectInfo = sessionProjectInfo(record, payload);
+        if (!project && projectInfo.project) {
+          project = projectInfo.project;
+          projectPath = projectInfo.projectPath;
+        }
+
+        const textValue = sessionDescriptionText(record, payload);
+        if (!description && textValue) description = textValue;
+        if (sessionId && description && project) break;
+      }
+
+      return {
+        sessionId,
+        timestampMs,
+        dateLabel: formatFileModified(timestampMs),
+        project: project || "Unknown project",
+        projectPath,
+        description: description || "No user prompt preview found in this session.",
+      };
+    }
+
+    function sessionProjectInfo(record, payload) {
+      const candidates = [
+        payload.cwd,
+        record.cwd,
+        Array.isArray(payload.workspace_roots) ? payload.workspace_roots[0] : "",
+        Array.isArray(record.workspace_roots) ? record.workspace_roots[0] : "",
+        payload.git?.cwd,
+        record.git?.cwd,
+      ].filter(Boolean);
+      const projectPath = candidates.find((item) => typeof item === "string" && item.trim()) || "";
+      return {
+        project: projectNameFromPath(projectPath),
+        projectPath,
+      };
+    }
+
+    function projectNameFromPath(path) {
+      const value = String(path || "").trim().replace(/\/+$/, "");
+      if (!value) return "";
+      return value.split("/").filter(Boolean).pop() || value;
+    }
+
+    function sessionDescriptionText(record, payload) {
+      let text = "";
+      if (payload.type === "user_message") {
+        text = textFromOutput(payload.message || payload.content);
+      } else if (payload.type === "message" && payload.role === "user") {
+        text = textFromOutput(payload.message || payload.content);
+        if (isInjectedUserContext(text)) text = "";
+      } else if (record.type === "user_message") {
+        text = textFromOutput(payload.message || payload.content || record.message || record.content);
+      }
+      if (!text) return "";
+      const cleaned = cleanupUserVisibleText(text, extractTaggedBlocks(text));
+      return compact(cleaned || text, 220).replace(/\s+/g, " ");
+    }
+
+    async function buildSessionCatalogItem(file, path) {
+      const sample = await file.slice(0, Math.min(file.size, 768 * 1024)).text();
+      const meta = parseSessionCatalogMeta(sample, path, file);
+      return {
+        id: catalogIdForSession(path, file),
+        name: file.name,
+        path,
+        file,
+        size: file.size,
+        lastModified: file.lastModified,
+        ...meta,
+      };
+    }
+
+    function visibleCatalogSessions() {
+      const query = state.sessionCatalogFilter.trim().toLowerCase();
+      return state.sessionCatalog
+        .filter((item) => {
+          if (!query) return true;
+          return String(item.sessionId || "").toLowerCase().includes(query);
+        })
+        .sort((a, b) => {
+          const direction = state.sessionCatalogSort === "asc" ? 1 : -1;
+          return direction * ((a.timestampMs || 0) - (b.timestampMs || 0)) || a.path.localeCompare(b.path);
+        });
+    }
+
+    function sessionRowHtml(item) {
+      return `
+        <button class="session-row" type="button" data-session-id="${escapeHtml(item.id)}" title="${escapeHtml(item.path)}">
+          <div class="session-row-head">
+            <span class="session-date">${escapeHtml(item.dateLabel)}</span>
+            <span class="session-id">${escapeHtml(item.sessionId)}</span>
+          </div>
+          <div class="session-project" title="${escapeHtml(item.projectPath || item.project)}">${escapeHtml(item.project)}</div>
+          <div class="session-desc">${escapeHtml(item.description)}</div>
+          <div class="session-path">${escapeHtml(shortSessionPath(item.path))}</div>
+        </button>
+      `;
+    }
+
+    function groupedSessionCatalogHtml(sessions) {
+      const groups = new Map();
+      sessions.forEach((item) => {
+        const key = item.project || "Unknown project";
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(item);
+      });
+      return [...groups.entries()].map(([project, items]) => `
+        <div class="session-project-group">${escapeHtml(project)} · ${items.length}</div>
+        ${items.map(sessionRowHtml).join("")}
+      `).join("");
+    }
+
+    function renderSessionCatalog() {
+      const sessions = visibleCatalogSessions();
+
+      if (!state.sessionCatalog.length) {
+        el.sessionCatalogMeta.textContent = "No sessions listed";
+        el.sessionCatalogList.innerHTML = '<div class="empty">Choose your .codex directory to list sessions.</div>';
+        return;
+      }
+
+      el.sessionCatalogMeta.textContent = `${sessions.length} of ${state.sessionCatalog.length} sessions shown`;
+
+      if (!sessions.length) {
+        el.sessionCatalogList.innerHTML = '<div class="empty">No sessions match this session id filter.</div>';
+        return;
+      }
+
+      el.sessionCatalogList.innerHTML = state.sessionCatalogView === "project"
+        ? groupedSessionCatalogHtml(sessions)
+        : sessions.map(sessionRowHtml).join("");
+    }
+
+    function updateCodexConnectionStatus(connected, detail = "") {
+      el.chooseCodexDirButton.textContent = connected ? "Choose Session" : "Choose .codex Directory";
+      el.codexConnectionState.textContent = connected ? "Connected to .codex" : "Connect your Codex sessions";
+      el.codexConnectionState.classList.toggle("connected", connected);
+      el.codexConnectionDetail.innerHTML = connected
+        ? escapeHtml(detail || "Click Choose Session to switch sessions.")
+        : 'Mac users: choose the hidden <code>.codex</code> directory in your home folder.';
+    }
+
+    async function collectSessionsFromDirectoryHandle(dirHandle) {
+      const sessions = [];
+      let visited = 0;
+      let rootHandle = dirHandle;
+      let rootPrefix = dirHandle.name || "";
+
+      if (!isCodexSessionDirectoryName(dirHandle.name)) {
+        let foundHandle = null;
+        let foundName = "";
+        for (const directoryName of codexSessionDirectoryNames) {
+          try {
+            foundHandle = await dirHandle.getDirectoryHandle(directoryName);
+            foundName = directoryName;
+            break;
+          } catch (_) {
+            // Try the next known Codex session directory name.
+          }
+        }
+        if (!foundHandle) {
+          throw new Error("The selected directory does not contain a sessions folder");
+        }
+        rootHandle = foundHandle;
+        rootPrefix = foundName;
+      }
+
+      async function walk(handle, prefix) {
+        for await (const [name, entry] of handle.entries()) {
+          const path = prefix ? `${prefix}/${name}` : name;
+          if (entry.kind === "directory") {
+            await walk(entry, path);
+            continue;
+          }
+          if (!isCodexSessionPath(path, name)) continue;
+          visited += 1;
+          if (visited % 100 === 0) {
+            el.status.textContent = `Listing sessions... ${visited} found`;
+          }
+          const file = await entry.getFile();
+          sessions.push(await buildSessionCatalogItem(file, path));
+        }
+      }
+
+      await walk(rootHandle, rootPrefix);
+      return sessions.sort((a, b) => b.timestampMs - a.timestampMs || a.path.localeCompare(b.path));
+    }
+
+    async function collectSessionsFromFileList(files) {
+      const candidates = [...files]
+        .filter((file) => isCodexSessionPath(file.webkitRelativePath || "", file.name))
+        .map((file) => ({ file, path: file.webkitRelativePath || file.name }));
+      const sessions = [];
+      for (let index = 0; index < candidates.length; index += 1) {
+        if (index % 100 === 0) el.status.textContent = `Listing sessions... ${index}/${candidates.length}`;
+        const item = candidates[index];
+        sessions.push(await buildSessionCatalogItem(item.file, item.path));
+      }
+      return sessions.sort((a, b) => b.timestampMs - a.timestampMs || a.path.localeCompare(b.path));
+    }
+
+    async function loadCatalogFromDirectoryHandle(dirHandle) {
+      el.status.textContent = "Scanning .codex/sessions...";
+      const sessions = await collectSessionsFromDirectoryHandle(dirHandle);
+      const sourceLabel = isCodexSessionDirectoryName(dirHandle.name)
+        ? `selected ${dirHandle.name} directory`
+        : `${dirHandle.name || ".codex"}/sessions`;
+      state.codexDirectoryHandle = dirHandle;
+      state.codexDirectoryLabel = sourceLabel;
+      state.sessionCatalog = sessions;
+      state.sessionCatalogFilter = "";
+      state.sessionCatalogSort = "desc";
+      state.sessionCatalogView = "project";
+      el.sessionCatalogFilter.value = "";
+      el.sessionCatalogSort.value = state.sessionCatalogSort;
+      el.sessionCatalogView.value = state.sessionCatalogView;
+      updateCodexConnectionStatus(true, `${sourceLabel} · ${sessions.length} sessions found`);
+      renderSessionCatalog();
+      openSessionModal();
+      el.status.textContent = sessions.length
+        ? `${sessions.length} sessions listed from ${sourceLabel}`
+        : `No session files found under ${sourceLabel}`;
+    }
+
+    async function chooseCodexDirectory(options = {}) {
+      if (!options.forcePicker && state.sessionCatalog.length) {
+        openSessionModal();
+        return;
+      }
+
+      el.status.textContent = "Choose your .codex directory; sessions/ will be listed";
+      if (!window.showDirectoryPicker) {
+        el.codexDirInput.value = "";
+        el.codexDirInput.click();
+        return;
+      }
+
+      try {
+        const savedHandle = await getSavedCodexDirectoryHandle();
+        if (!options.forcePicker && savedHandle && await ensureDirectoryReadPermission(savedHandle)) {
+          await loadCatalogFromDirectoryHandle(savedHandle);
+          return;
+        }
+
+        const dirHandle = await pickCodexDirectory(savedHandle);
+        await saveCodexDirectoryHandle(dirHandle);
+        await loadCatalogFromDirectoryHandle(dirHandle);
+      } catch (error) {
+        if (error.name === "AbortError") {
+          el.status.textContent = "Codex directory selection cancelled";
+          return;
+        }
+        el.status.textContent = `Could not list sessions: ${error.message}`;
+      }
+    }
+
+    async function pickCodexDirectory(startInHandle) {
+      if (!startInHandle) return window.showDirectoryPicker({ mode: "read" });
+      try {
+        return await window.showDirectoryPicker({ mode: "read", startIn: startInHandle });
+      } catch (error) {
+        if (error.name === "AbortError") throw error;
+        return window.showDirectoryPicker({ mode: "read" });
+      }
+    }
+
+    async function ensureDirectoryReadPermission(handle) {
+      if (!handle?.queryPermission || !handle?.requestPermission) return true;
+      const options = { mode: "read" };
+      if (await handle.queryPermission(options) === "granted") return true;
+      return await handle.requestPermission(options) === "granted";
+    }
+
+    function openSettingsDb() {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open("codex-session-viewer-settings", 1);
+        request.onupgradeneeded = () => {
+          request.result.createObjectStore("settings");
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    async function getSavedCodexDirectoryHandle() {
+      try {
+        const db = await openSettingsDb();
+        const handle = await new Promise((resolve, reject) => {
+          const tx = db.transaction("settings", "readonly");
+          const request = tx.objectStore("settings").get("codexDirectoryHandle");
+          request.onsuccess = () => resolve(request.result || null);
+          request.onerror = () => reject(request.error);
+        });
+        db.close();
+        return handle;
+      } catch (_) {
+        return null;
+      }
+    }
+
+    async function saveCodexDirectoryHandle(handle) {
+      try {
+        const db = await openSettingsDb();
+        await new Promise((resolve, reject) => {
+          const tx = db.transaction("settings", "readwrite");
+          tx.objectStore("settings").put(handle, "codexDirectoryHandle");
+          tx.oncomplete = resolve;
+          tx.onerror = () => reject(tx.error);
+        });
+        db.close();
+      } catch (_) {
+        // Remembering the directory is a convenience; scanning still works without it.
+      }
+    }
+
+    function openSessionModal() {
+      renderSessionCatalog();
+      el.sessionModal.hidden = false;
+      requestAnimationFrame(() => el.sessionCatalogFilter.focus());
+    }
+
+    function closeSessionModal() {
+      el.sessionModal.hidden = true;
+    }
+
+    async function loadCatalogSessionById(id) {
+      const item = state.sessionCatalog.find((session) => session.id === id);
+      if (!item) {
+        el.status.textContent = "Choose a listed session first";
+        return;
+      }
+      closeSessionModal();
+      await loadLocatedSession(item.file, item.path);
+    }
+
+    async function loadSessionText(text, name) {
+      state.fileName = name || "session.jsonl";
+      el.status.textContent = "Parsing...";
+      const parsed = parseJsonl(text);
+      state.rawLines = parsed.lines;
+      state.events = parsed.events;
+      state.selectedId = state.events[0]?.id || null;
+      state.collapsedTurns.clear();
+      el.exportButton.disabled = !state.events.length;
+      renderAll();
+      if (parsed.errors.length) {
+        el.status.textContent = `${state.events.length} events loaded, ${parsed.errors.length} parse errors`;
+      }
+    }
+
+    function exportRedacted() {
+      const redacted = state.events.map((event) => redact(event.record)).join("\n");
+      const blob = new Blob([redacted + "\n"], { type: "application/jsonl" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${state.fileName || "session"}.redacted.jsonl`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    el.chooseCodexDirButton.addEventListener("click", () => {
+      chooseCodexDirectory();
+    });
+
+    el.sessionCatalogFilter.addEventListener("input", () => {
+      state.sessionCatalogFilter = el.sessionCatalogFilter.value;
+      renderSessionCatalog();
+    });
+
+    el.sessionCatalogSort.addEventListener("change", () => {
+      state.sessionCatalogSort = el.sessionCatalogSort.value;
+      renderSessionCatalog();
+    });
+
+    el.sessionCatalogView.addEventListener("change", () => {
+      state.sessionCatalogView = el.sessionCatalogView.value;
+      renderSessionCatalog();
+    });
+
+    el.sessionCatalogList.addEventListener("click", (event) => {
+      const row = event.target.closest("[data-session-id]");
+      if (!row) return;
+      loadCatalogSessionById(row.dataset.sessionId);
+    });
+
+    el.changeCodexDirButton.addEventListener("click", () => {
+      chooseCodexDirectory({ forcePicker: true });
+    });
+
+    el.closeSessionModalButton.addEventListener("click", closeSessionModal);
+
+    el.sessionModal.addEventListener("click", (event) => {
+      if (event.target === el.sessionModal) closeSessionModal();
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !el.sessionModal.hidden) closeSessionModal();
+    });
+
+    el.codexDirInput.addEventListener("change", async (event) => {
+      const files = event.target.files || [];
+      if (!files.length) {
+        el.status.textContent = "No .codex directory files selected";
+        return;
+      }
+      try {
+        const sessions = await collectSessionsFromFileList(files);
+        state.sessionCatalog = sessions;
+        state.sessionCatalogFilter = "";
+        state.sessionCatalogSort = "desc";
+        state.sessionCatalogView = "project";
+        el.sessionCatalogFilter.value = "";
+        el.sessionCatalogSort.value = state.sessionCatalogSort;
+        el.sessionCatalogView.value = state.sessionCatalogView;
+        updateCodexConnectionStatus(true, `Selected directory · ${sessions.length} sessions found`);
+        renderSessionCatalog();
+        openSessionModal();
+        el.status.textContent = sessions.length
+          ? `${sessions.length} sessions listed from selected directory`
+          : "No session files found under sessions/";
+      } catch (error) {
+        el.status.textContent = `Could not list sessions: ${error.message}`;
+      }
+    });
+
+    function runSearch() {
+      state.searchQuery = el.searchInput.value.trim();
+      renderAll();
+    }
+
+    el.searchButton.addEventListener("click", runSearch);
+
+    el.searchInput.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      runSearch();
+    });
+
+    el.kindFilter.addEventListener("change", () => {
+      renderAll();
+    });
+
+    el.turnIndex.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-turn-jump]");
+      if (!button || button.disabled) return;
+      const target = [...el.timeline.querySelectorAll("[data-turn-key]")]
+        .find((item) => item.dataset.turnKey === button.dataset.turnJump);
+      if (!target) return;
+      target.scrollIntoView({ block: "start", behavior: "smooth" });
+    });
+
+    el.timeline.addEventListener("click", (event) => {
+      const toggle = event.target.closest("[data-turn-toggle]");
+      if (toggle) {
+        const key = toggle.dataset.turnToggle;
+        if (state.collapsedTurns.has(key)) {
+          state.collapsedTurns.delete(key);
+        } else {
+          state.collapsedTurns.add(key);
+        }
+        renderTimeline();
+        return;
+      }
+      const item = event.target.closest(".event");
+      if (!item) return;
+      selectEventById(item.dataset.id);
+    });
+
+    el.exportButton.addEventListener("click", exportRedacted);
+
+    renderAll();
+  </script>
+</body>
+</html>
