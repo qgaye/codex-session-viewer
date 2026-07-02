@@ -593,6 +593,194 @@
       overflow: hidden;
     }
 
+    .flow-panel {
+      border: 1px solid #b7c5d8;
+      border-radius: 8px;
+      background: #ffffff;
+      margin: 0 0 14px;
+      overflow: hidden;
+    }
+
+    .flow-head {
+      border-bottom: 1px solid var(--line);
+      background: #eef4fb;
+      padding: 10px 12px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .flow-head h2 {
+      margin: 0;
+      font-size: 13px;
+      line-height: 1.3;
+    }
+
+    .flow-head span {
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .flow-body {
+      padding: 12px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .flow-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      align-items: center;
+    }
+
+    .flow-legend .badge {
+      font-size: 11px;
+      padding: 3px 7px;
+    }
+
+    .flow-group {
+      display: grid;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .flow-group-title {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .flow-group-title strong {
+      color: var(--text);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .flow-strip {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding: 2px 2px 8px;
+      scrollbar-width: thin;
+    }
+
+    .flow-step {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      flex: 0 0 auto;
+    }
+
+    .flow-arrow {
+      color: #94a3b8;
+      font-family: var(--mono);
+      font-size: 16px;
+      line-height: 1;
+      user-select: none;
+    }
+
+    .flow-node {
+      width: 156px;
+      min-height: 82px;
+      border: 1px solid var(--line);
+      border-left-width: 5px;
+      border-radius: 8px;
+      background: #fbfcfe;
+      color: var(--text);
+      padding: 8px;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 4px;
+      text-align: left;
+      cursor: pointer;
+      box-shadow: 0 1px 0 rgba(15, 23, 32, 0.03);
+    }
+
+    .flow-node:hover {
+      border-color: #8aa7cc;
+      box-shadow: 0 0 0 2px rgba(31, 111, 235, 0.10);
+    }
+
+    .flow-node.selected {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 2px rgba(31, 111, 235, 0.16);
+    }
+
+    .flow-node.upstream {
+      border-left-color: #0f766e;
+    }
+
+    .flow-node.downstream {
+      border-left-color: #7c3aed;
+    }
+
+    .flow-node.runtime {
+      border-left-color: #64748b;
+    }
+
+    .flow-node.mixed {
+      border-left-color: #b85c00;
+    }
+
+    .flow-node strong {
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.25;
+      overflow-wrap: anywhere;
+    }
+
+    .flow-node span {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.25;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .flow-node .flow-node-summary {
+      font-family: var(--mono);
+      white-space: normal;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .flow-node .flow-node-meta {
+      display: flex;
+      gap: 5px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .flow-chip {
+      border: 1px solid #c5d1df;
+      border-radius: 999px;
+      background: #fff;
+      color: var(--muted);
+      padding: 2px 5px;
+      font-family: var(--mono);
+      font-size: 10px;
+      line-height: 1.2;
+      white-space: nowrap;
+    }
+
+    .flow-more {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+      padding: 0 2px;
+    }
+
     .event {
       border: 1px solid var(--line);
       background: var(--panel);
@@ -1252,6 +1440,15 @@
         min-height: 480px;
         height: auto;
         overflow: visible;
+      }
+
+      .flow-head,
+      .flow-group-title {
+        grid-template-columns: 1fr;
+      }
+
+      .flow-node {
+        width: 142px;
       }
     }
   </style>
@@ -3280,6 +3477,128 @@
       }).join("");
     }
 
+    function renderEventFlow(events) {
+      if (!events.length) return "";
+      const maxGroups = 12;
+      const allGroups = buildEventFlowGroups(events);
+      const groups = allGroups.slice(0, maxGroups);
+      const omittedGroups = Math.max(0, allGroups.length - groups.length);
+      const nodeCount = groups.reduce((sum, group) => sum + group.nodes.length, 0);
+      return `
+        <section class="flow-panel" aria-label="Event type flow">
+          <div class="flow-head">
+            <h2>Event Type Flow</h2>
+            <span>${nodeCount} nodes · ${events.length} events</span>
+          </div>
+          <div class="flow-body">
+            <div class="flow-legend">
+              <span class="badge upstream">上行</span>
+              <span class="badge downstream">下行</span>
+              <span class="badge runtime">运行状态</span>
+              <span class="badge mixed">混合/未知</span>
+              <span class="notice">按当前过滤结果生成；点击节点可定位原始 event。</span>
+            </div>
+            ${groups.map(renderEventFlowGroup).join("")}
+            ${omittedGroups ? `<div class="flow-more">还有 ${omittedGroups} 个 turn 未展示，可通过 Turn Index 或过滤器缩小范围。</div>` : ""}
+          </div>
+        </section>
+      `;
+    }
+
+    function buildEventFlowGroups(events) {
+      return groupTurns(events).map((group) => {
+        const nodes = [];
+        group.events.forEach((event) => {
+          const key = eventFlowNodeKey(event);
+          const last = nodes[nodes.length - 1];
+          if (last && last.key === key) {
+            last.events.push(event);
+            last.endLine = event.lineNumber;
+            if (event.id === state.selectedId) last.selected = true;
+            if (event.pairLine && !last.pairLines.includes(event.pairLine)) last.pairLines.push(event.pairLine);
+            return;
+          }
+          nodes.push({
+            key,
+            eventType: event.eventType || "unknown",
+            recordType: event.recordType || "-",
+            layer: eventDoc(event.eventType, event).layer,
+            flowKind: event.flowKind || "mixed",
+            flowLabel: event.flowLabel || flowLabel(event.flowKind || "mixed"),
+            startLine: event.lineNumber,
+            endLine: event.lineNumber,
+            firstId: event.id,
+            title: event.title || event.eventType || "event",
+            summary: event.preview || event.fullPreview || "",
+            pairLines: event.pairLine ? [event.pairLine] : [],
+            selected: event.id === state.selectedId,
+            events: [event],
+          });
+        });
+        return {
+          ...group,
+          nodes,
+        };
+      }).filter((group) => group.nodes.length);
+    }
+
+    function eventFlowNodeKey(event) {
+      const role = event.payload?.role || "";
+      const phase = toolCallPhase(event) || "";
+      return [
+        event.turnKey,
+        event.recordType || "-",
+        event.eventType || "unknown",
+        event.flowKind || "mixed",
+        role,
+        phase,
+      ].join("|");
+    }
+
+    function renderEventFlowGroup(group) {
+      const title = group.index === "Setup" ? "Session Setup" : `Turn ${group.index || "-"}`;
+      const summary = group.summary || "No user message summary available";
+      const maxNodes = 80;
+      const nodes = group.nodes.slice(0, maxNodes);
+      const omittedNodes = Math.max(0, group.nodes.length - nodes.length);
+      return `
+        <div class="flow-group">
+          <div class="flow-group-title">
+            <strong>${escapeHtml(title)}</strong>
+            <span>${escapeHtml(summary)}</span>
+          </div>
+          <div class="flow-strip">
+            ${nodes.map((node, index) => renderEventFlowNode(node, index)).join("")}
+            ${omittedNodes ? `<span class="flow-more">还有 ${omittedNodes} 个节点未展示</span>` : ""}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderEventFlowNode(node, index) {
+      const lineLabel = node.startLine === node.endLine
+        ? `line ${node.startLine}`
+        : `lines ${node.startLine}-${node.endLine}`;
+      const countLabel = node.events.length > 1 ? `${node.events.length}x` : "1x";
+      const pairLabel = node.pairLines.length ? `pair ${node.pairLines.slice(0, 2).join(",")}` : "";
+      const selected = node.selected ? " selected" : "";
+      return `
+        <div class="flow-step">
+          ${index ? '<span class="flow-arrow">→</span>' : ""}
+          <button class="flow-node ${escapeHtml(node.flowKind)}${selected}" type="button" data-flow-event-id="${escapeHtml(node.firstId)}" title="${escapeHtml(`${node.eventType}\n${node.layer}\n${lineLabel}`)}">
+            <strong>${escapeHtml(node.eventType)}</strong>
+            <span>${escapeHtml(node.recordType)} · ${escapeHtml(node.flowLabel)}</span>
+            <span class="flow-node-summary">${escapeHtml(compact(node.summary || node.title, 120))}</span>
+            <span class="flow-node-meta">
+              <span class="flow-chip">${escapeHtml(lineLabel)}</span>
+              <span class="flow-chip">${escapeHtml(countLabel)}</span>
+              ${pairLabel ? `<span class="flow-chip">${escapeHtml(pairLabel)}</span>` : ""}
+            </span>
+          </button>
+        </div>
+      `;
+    }
+
     function renderTimeline() {
       if (!state.events.length) {
         el.timeline.innerHTML = `
@@ -3295,8 +3614,9 @@
       const groups = groupTurns(state.filtered);
       const tokenStats = computeTurnTokenStats(state.events);
       const durationStats = computeTurnDurationStats(state.events);
+      const eventFlow = renderEventFlow(state.filtered);
 
-      el.timeline.innerHTML = groups.map((group) => {
+      el.timeline.innerHTML = eventFlow + groups.map((group) => {
         const collapsed = state.collapsedTurns.has(group.key);
         const turnTitle = group.index === "Setup" ? "Session Setup" : `Turn ${group.index || "-"}`;
         const stats = tokenStats.get(group.key);
@@ -4019,6 +4339,11 @@
           state.collapsedTurns.add(key);
         }
         renderTimeline();
+        return;
+      }
+      const flowNode = event.target.closest("[data-flow-event-id]");
+      if (flowNode) {
+        selectEventById(flowNode.dataset.flowEventId, true);
         return;
       }
       const item = event.target.closest(".event");
