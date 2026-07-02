@@ -1,0 +1,482 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Codex Session Event Types</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --panel-soft: #fbfcfe;
+      --text: #17202a;
+      --muted: #617083;
+      --line: #d9e0ea;
+      --blue: #1f6feb;
+      --green: #167a3e;
+      --orange: #b85c00;
+      --purple: #6f42c1;
+      --red: #c7362f;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      --sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 14px;
+      letter-spacing: 0;
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.96);
+      backdrop-filter: blur(12px);
+    }
+
+    .header-inner,
+    main {
+      width: min(1280px, calc(100vw - 32px));
+      margin: 0 auto;
+    }
+
+    .header-inner {
+      padding: 18px 0;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(260px, 420px);
+      gap: 18px;
+      align-items: center;
+    }
+
+    h1 {
+      margin: 0 0 5px;
+      font-size: 24px;
+      line-height: 1.2;
+    }
+
+    .subtitle {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .search {
+      height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 0 12px;
+      font: inherit;
+      min-width: 0;
+    }
+
+    main {
+      padding: 20px 0 40px;
+      display: grid;
+      gap: 18px;
+    }
+
+    .model {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      overflow: hidden;
+    }
+
+    .model-head {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      display: grid;
+      gap: 5px;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 16px;
+      line-height: 1.3;
+    }
+
+    .model-head p,
+    .note {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .layer-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0;
+    }
+
+    .layer {
+      padding: 14px 16px;
+      border-right: 1px solid var(--line);
+      min-width: 0;
+    }
+
+    .layer:last-child {
+      border-right: 0;
+    }
+
+    .layer strong {
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    .layer span,
+    .layer code {
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    code {
+      font-family: var(--mono);
+      font-size: 0.95em;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .flow-step {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 12px;
+      display: grid;
+      gap: 6px;
+      min-width: 0;
+    }
+
+    .flow-step strong {
+      font-family: var(--mono);
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+
+    .flow-step span {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .section-title {
+      margin: 10px 0 -4px;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .section-title h2 {
+      font-size: 18px;
+    }
+
+    .section-title span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 12px;
+      display: grid;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .card-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      align-items: start;
+    }
+
+    .card h3 {
+      margin: 0;
+      font-family: var(--mono);
+      font-size: 13px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .pill {
+      border-radius: 999px;
+      padding: 3px 7px;
+      color: #fff;
+      font-size: 11px;
+      white-space: nowrap;
+    }
+
+    .persisted {
+      background: var(--green);
+    }
+
+    .realtime {
+      background: var(--orange);
+    }
+
+    .mixed {
+      background: var(--purple);
+    }
+
+    .card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .fields {
+      border-top: 1px solid var(--line);
+      padding-top: 8px;
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 11px;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+
+    .warning {
+      border-left: 4px solid var(--red);
+      background: #fff8f7;
+      padding: 12px;
+      border-radius: 8px;
+      color: #7f1d1d;
+      line-height: 1.45;
+    }
+
+    @media (max-width: 980px) {
+      .header-inner {
+        grid-template-columns: 1fr;
+      }
+
+      .layer-grid,
+      .flow,
+      .cards {
+        grid-template-columns: 1fr;
+      }
+
+      .layer {
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .layer:last-child {
+        border-bottom: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-inner">
+      <div>
+        <h1>Codex Session Event Types</h1>
+        <p class="subtitle">基于本地 <code>EVENT_TYPES.md</code> 与 upstream Codex rollout policy 整理。核心规则：先看外层 <code>record.type</code>，再看内层 <code>payload.type</code>。</p>
+      </div>
+      <input id="filter" class="search" type="search" placeholder="筛选 event、字段或说明">
+    </div>
+  </header>
+
+  <main>
+    <section class="model">
+      <div class="model-head">
+        <h2>三层模型</h2>
+        <p>查看器中的 <code>eventType</code> 等于 <code>payload.type || record.type</code>。这方便筛选，但会隐藏同名 payload 在不同 record 下的语义差异。</p>
+      </div>
+      <div class="layer-grid">
+        <div class="layer">
+          <strong>1. 持久化结构层</strong>
+          <span><code>session_meta</code>、<code>turn_context</code>、<code>world_state</code>、<code>compacted</code> 等。用于恢复、fork、重放状态，不是对话消息。</span>
+        </div>
+        <div class="layer">
+          <strong>2. 模型可见 item 层</strong>
+          <span><code>record.type=response_item</code>。这些是模型历史和恢复上下文的核心 source of truth，包括消息、reasoning、工具调用和工具返回。</span>
+        </div>
+        <div class="layer">
+          <strong>3. legacy/UI 事件层</strong>
+          <span><code>record.type=event_msg</code>。用于 UI 回放、状态提示和兼容事件流。不是所有实时事件都会写入 rollout。</span>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-title">
+        <h2>典型 turn 链路</h2>
+        <span>实际文件可能省略实时 begin/delta 事件</span>
+      </div>
+      <div class="flow">
+        <div class="flow-step"><strong>turn_context</strong><span>本轮环境快照：cwd、sandbox、model、timezone。</span></div>
+        <div class="flow-step"><strong>event_msg / user_message</strong><span>用户在 UI 中提交的消息，常用作 turn 边界。</span></div>
+        <div class="flow-step"><strong>response_item / message(user)</strong><span>真正进入模型上下文的 user 材料包，可能包含注入上下文。</span></div>
+        <div class="flow-step"><strong>event_msg / task_started</strong><span>turn 开始边界，和 task_complete 配对。</span></div>
+        <div class="flow-step"><strong>response_item / reasoning</strong><span>模型 reasoning item，内容经常加密或只保留 summary。</span></div>
+        <div class="flow-step"><strong>response_item / *_call</strong><span>模型下发工具调用，通过 call_id 配对结果。</span></div>
+        <div class="flow-step"><strong>response_item / *_output</strong><span>工具返回给模型的结果，MCP 输出也会转换成 function_call_output。</span></div>
+        <div class="flow-step"><strong>event_msg / task_complete</strong><span>turn 完成边界，可能带 duration 和最后助手消息。</span></div>
+      </div>
+    </section>
+
+    <section class="warning">
+      不要只看 <code>payload.type</code> 判断语义。最典型的坑是 <code>agent_message</code>：在 <code>response_item</code> 下是多 agent 通信的模型可见 item；在 <code>event_msg</code> 下是助手消息的 UI/legacy 文本投影。
+    </section>
+
+    <section>
+      <div class="section-title">
+        <h2>持久化结构层</h2>
+        <span>record.type 本身就是主要语义</span>
+      </div>
+      <div class="cards" id="structureCards"></div>
+    </section>
+
+    <section>
+      <div class="section-title">
+        <h2>模型可见 item 层</h2>
+        <span>record.type=response_item</span>
+      </div>
+      <div class="cards" id="responseCards"></div>
+    </section>
+
+    <section>
+      <div class="section-title">
+        <h2>legacy/UI 事件层</h2>
+        <span>record.type=event_msg</span>
+      </div>
+      <div class="cards" id="eventCards"></div>
+    </section>
+
+    <section>
+      <div class="section-title">
+        <h2>通常不在 rollout 中</h2>
+        <span>实时事件流或非标准导出中可能看到</span>
+      </div>
+      <div class="cards" id="realtimeCards"></div>
+    </section>
+  </main>
+
+  <script>
+    const groups = {
+      structureCards: [
+        ["session_meta", "rollout 会话元数据，通常是 JSONL 第一行。描述 thread 来源和启动环境。", "id/session_id、cwd、source、originator、cli_version、model_provider、base_instructions、dynamic_tools、git"],
+        ["turn_context", "每个真实用户 turn 的环境快照。resume/fork 和 mid-turn 压缩恢复会依赖它。", "turn_id、cwd、workspace_roots、current_date/timezone、approval_policy、sandbox_policy、permission_profile、network、model、effort、collaboration_mode"],
+        ["world_state", "用于恢复 world-state diff 的状态。full=true 表示全量快照，false 表示 merge patch。", "full、state"],
+        ["compacted", "上下文压缩记录。它和 response_item 中的 compaction/context_compaction 不是同一类东西。", "message、replacement_history、window_number、first_window_id、previous_window_id、window_id"],
+        ["inter_agent_communication", "legacy agent 间通信记录，会被重建为模型可见 agent_message。", "author、recipient、other_recipients、content/encrypted_content、trigger_turn"],
+        ["inter_agent_communication_metadata", "agent 间通信的本地附加元数据，不属于 Responses API item。", "trigger_turn"],
+      ],
+      responseCards: [
+        ["message", "Responses API/message-history 层的模型可见消息。必须结合 role 判断方向。", "role、content、phase、id"],
+        ["agent_message", "多 agent 通信的模型可见 item。不要和 EventMsg::AgentMessage 混淆。", "author、recipient、content、internal_chat_message_metadata_passthrough"],
+        ["reasoning", "模型 reasoning item。summary 可能可见，content/encrypted_content 取决于配置。", "summary、content/encrypted_content"],
+        ["function_call", "模型下发的 function_call。arguments 在源码中按字符串保存，内容通常是 JSON。", "name、namespace、call_id、arguments"],
+        ["function_call_output", "function_call 对应工具返回。MCP 工具输出也会被转换为这类 item。", "call_id、output"],
+        ["custom_tool_call", "custom/freeform tool 调用。input 是自由文本，不一定是 JSON。", "name、call_id、input、status"],
+        ["custom_tool_call_output", "custom_tool_call 的返回。output 编码与 function_call_output 相同。", "call_id、name、output"],
+        ["tool_search_call", "模型请求检索可用工具，不是业务工具本身。", "call_id、execution、arguments、status"],
+        ["tool_search_output", "tool_search 的检索结果。", "call_id、tools、status、execution"],
+        ["web_search_call", "模型触发 web search 的 Responses API item。", "status、action"],
+        ["image_generation_call", "模型触发图片生成的 Responses API item。", "status、revised_prompt、result"],
+        ["local_shell_call", "模型侧记录到的本地 shell 动作，不等同于完整 stdout/stderr。", "call_id、status、action"],
+        ["compaction", "模型侧压缩 item，通常携带 encrypted_content。", "encrypted_content、id"],
+        ["context_compaction", "模型侧上下文压缩 item，和顶层 compacted 一起服务于窗口恢复。", "encrypted_content、id"],
+      ],
+      eventCards: [
+        ["user_message", "UI/legacy 层的用户消息。更接近聊天框输入，不等同于完整模型上行上下文。", "message、images/local_images、text_elements、client_id"],
+        ["agent_message", "UI/legacy 层的助手消息文本投影。常与 message(role=assistant) 内容相近，但结构更少。", "message、phase、memory_citation"],
+        ["agent_reasoning", "UI 可展示的 reasoning 摘要。", "text"],
+        ["agent_reasoning_raw_content", "raw reasoning 内容。只有配置允许时才有实际内容。", "text"],
+        ["task_started / turn_started", "一次 turn 开始。新写出的 rollout 使用 task_started，turn_started 是兼容别名。", "turn_id、trace_id、started_at、model_context_window、collaboration_mode_kind"],
+        ["task_complete / turn_complete", "一次 turn 完成。新写出的 rollout 使用 task_complete，turn_complete 是兼容别名。", "turn_id、last_agent_message、completed_at、duration_ms、time_to_first_token_ms"],
+        ["token_count", "token 使用量、上下文窗口和限流状态遥测。", "total_token_usage、last_token_usage、model_context_window、rate limit 信息"],
+        ["mcp_tool_call_end", "MCP 工具调用结束事件。rollout 中通常只有 end，没有 begin。", "call_id、invocation.server/tool/arguments、duration、result"],
+        ["patch_apply_end", "apply_patch/文件修改流程完成事件。", "success/status、stdout、stderr、error"],
+        ["web_search_end", "web search 完成展示事件。具体调用也可看 web_search_call。", "status、action/result 相关字段"],
+        ["image_generation_end", "图片生成完成展示事件。具体调用也可看 image_generation_call。", "status、result/path 相关字段"],
+        ["entered_review_mode", "进入 code review 模式。", "ReviewRequest payload"],
+        ["exited_review_mode", "退出 code review 模式。", "review_output"],
+        ["thread_goal_updated", "长期 thread goal 状态更新。", "objective、status、budget"],
+        ["context_compacted", "上下文压缩完成的 UI 事件。恢复上下文还要看顶层 compacted。", "压缩状态字段"],
+        ["thread_rolled_back", "thread rollback 事件。恢复历史时据此丢弃最后 N 个用户 turn。", "num_turns"],
+        ["turn_aborted", "turn 被中断或取消。", "turn_id、reason、message"],
+        ["sub_agent_activity", "v2 path-based sub-agent 活动。", "agent path、activity、status、message"],
+        ["item_completed", "新式 turn item 完成事件。policy 当前只持久化 Plan/Sleep 这类没有等价 response_item 的 item。", "item.type、item payload"],
+      ],
+      realtimeCards: [
+        ["mcp_tool_call_begin", "MCP 调用开始事件。默认不写入 rollout，只持久化 mcp_tool_call_end。", "call_id、invocation"],
+        ["exec_command_begin / exec_command_end", "终端命令实时事件。默认不写入 rollout。", "call_id、cmd、stdout/stderr 相关字段"],
+        ["web_search_begin / image_generation_begin", "web search 或图片生成开始事件。默认不写入 rollout。", "action、call_id"],
+        ["patch_apply_begin / patch_apply_updated", "apply_patch 开始和过程事件。默认不写入 rollout。", "patch、status"],
+        ["plan_update", "计划更新事件。默认不写入 rollout；持久化计划完成看 item_completed 中的 Plan。", "plan items"],
+        ["raw_response_item", "完整 ResponseItem 的事件封装。默认不写入 rollout，真正恢复历史看顶层 response_item。", "item"],
+        ["*_delta / approval / elicitation", "流式 delta、审批请求、用户输入请求等实时交互事件。默认不写入 rollout。", "按具体事件 payload 判断"],
+      ],
+    };
+
+    const persistedSections = new Set(["structureCards", "responseCards", "eventCards"]);
+
+    function cardHtml(item, persisted) {
+      const [name, role, fields] = item;
+      const pillClass = persisted ? "persisted" : "realtime";
+      const pillText = persisted ? "rollout" : "realtime";
+      return `
+        <article class="card" data-search="${escapeHtml(`${name} ${role} ${fields}`.toLowerCase())}">
+          <div class="card-head">
+            <h3>${escapeHtml(name)}</h3>
+            <span class="pill ${pillClass}">${pillText}</span>
+          </div>
+          <p>${escapeHtml(role)}</p>
+          <div class="fields">重点字段: ${escapeHtml(fields)}</div>
+        </article>
+      `;
+    }
+
+    function render() {
+      for (const [id, items] of Object.entries(groups)) {
+        const target = document.getElementById(id);
+        target.innerHTML = items.map((item) => cardHtml(item, persistedSections.has(id))).join("");
+      }
+      applyFilter();
+    }
+
+    function applyFilter() {
+      const query = document.getElementById("filter").value.trim().toLowerCase();
+      document.querySelectorAll(".card").forEach((card) => {
+        card.hidden = query && !card.dataset.search.includes(query);
+      });
+    }
+
+    function escapeHtml(value) {
+      return String(value == null ? "" : value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    document.getElementById("filter").addEventListener("input", applyFilter);
+    render();
+  </script>
+</body>
+</html>

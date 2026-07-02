@@ -888,6 +888,16 @@
       line-height: 1.45;
     }
 
+    .notice a {
+      color: var(--blue);
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    .notice a:hover {
+      text-decoration: underline;
+    }
+
     .structured-text {
       display: grid;
       gap: 10px;
@@ -1038,6 +1048,13 @@
       gap: 8px;
     }
 
+    .guide-group-title {
+      margin: 8px 0 0;
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
     .guide-card {
       border: 1px solid var(--line);
       border-radius: 8px;
@@ -1047,9 +1064,28 @@
       gap: 4px;
     }
 
+    .guide-card-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      align-items: start;
+      min-width: 0;
+    }
+
     .guide-card strong {
       font-size: 12px;
       overflow-wrap: anywhere;
+    }
+
+    .guide-count {
+      border: 1px solid #c5d1df;
+      border-radius: 999px;
+      background: #fff;
+      padding: 2px 6px;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 11px;
+      white-space: nowrap;
     }
 
     .guide-card span {
@@ -1268,6 +1304,7 @@
           <h2>Notes</h2>
           <div class="notice">
             Reasoning content is usually encrypted in Codex session files. This viewer focuses on visible messages, tool calls, tool outputs, and searchable execution signals.
+            <br><a href="event-types.html" target="_blank" rel="noopener">Open standalone event type guide</a>
           </div>
         </section>
       </aside>
@@ -1524,19 +1561,19 @@
         direction: "运行状态记录",
       },
       mcp_tool_call_end: {
-        role: "MCP 工具调用结束事件。",
-        watch: "通过 call_id/name/server/status 与开始事件或 response item 配对，查看工具执行结果。",
+        role: "MCP 工具调用结束事件（EventMsg::McpToolCallEnd）。它是 rollout 中实际持久化的 MCP 工具结果事件。",
+        watch: "重点看 call_id、invocation(server/tool/arguments)、duration、result（Ok=CallToolResult 或 Err=错误字符串）。由于 mcp_tool_call_begin 默认不持久化，rollout 中通常只能看到 end，用 call_id 自身定位即可。",
         direction: "工具执行结果事件",
       },
       mcp_tool_call_begin: {
-        role: "MCP 工具调用开始事件。",
-        watch: "通过 call_id 与 mcp_tool_call_end 配对。invocation 里包含 server、tool 和 arguments。",
-        direction: "模型下发 MCP 工具调用",
+        role: "MCP 工具调用开始事件（EventMsg::McpToolCallBegin）。",
+        watch: "invocation 里包含 server、tool 和 arguments。但 rollout policy 默认不持久化 mcp_tool_call_begin（只持久化 mcp_tool_call_end），所以正常 rollout 文件里不会出现它；若出现多半来自实时事件流或非标准导出。配对结果时应直接看 mcp_tool_call_end。",
+        direction: "实时事件；通常不在 rollout 中持久化",
       },
       mcp_tool_call: {
-        role: "MCP 工具调用状态项。",
-        watch: "重点看 id/call_id、server、tool、arguments、status、result/error。completed/failed 状态通常已经包含结果。",
-        direction: "MCP 工具调用记录",
+        role: "MCP 工具调用状态项。它不是 RolloutItem 顶层类型，而是 TurnItem::McpToolCall，通常嵌在 item_completed.payload.item 内。",
+        watch: "重点看 id、server、tool、arguments、status、result/error；completed/failed 状态通常已包含结果（注意它只有 id，没有 call_id）。由于 McpToolCall 不在 item_completed 的 Plan/Sleep 持久化白名单内，它一般不会作为顶层 payload.type 出现在 rollout 中；真正持久化的 MCP 结果是 mcp_tool_call_end，以及转换后的 function_call_output。",
+        direction: "MCP 工具调用记录（TurnItem，通常不单独持久化）",
       },
       thread_rolled_back: {
         role: "thread rollback 事件。",
@@ -1580,25 +1617,225 @@
       },
     };
 
+    const structureRecordTypes = new Set([
+      "session_meta",
+      "turn_context",
+      "world_state",
+      "compacted",
+      "inter_agent_communication",
+      "inter_agent_communication_metadata",
+    ]);
+
+    const persistedResponseItemTypes = new Set([
+      "message",
+      "agent_message",
+      "reasoning",
+      "local_shell_call",
+      "function_call",
+      "tool_search_call",
+      "function_call_output",
+      "tool_search_output",
+      "custom_tool_call",
+      "custom_tool_call_output",
+      "web_search_call",
+      "image_generation_call",
+      "compaction",
+      "context_compaction",
+    ]);
+
+    const nonPersistedResponseItemTypes = new Set([
+      "additional_tools",
+      "compaction_trigger",
+      "other",
+    ]);
+
+    const persistedEventMsgTypes = new Set([
+      "user_message",
+      "agent_message",
+      "agent_reasoning",
+      "agent_reasoning_raw_content",
+      "patch_apply_end",
+      "token_count",
+      "thread_goal_updated",
+      "context_compacted",
+      "entered_review_mode",
+      "exited_review_mode",
+      "mcp_tool_call_end",
+      "thread_rolled_back",
+      "turn_aborted",
+      "task_started",
+      "turn_started",
+      "task_complete",
+      "turn_complete",
+      "web_search_end",
+      "image_generation_end",
+      "sub_agent_activity",
+      "item_completed",
+    ]);
+
+    const usuallyRealtimeOnlyEventMsgTypes = new Set([
+      "mcp_tool_call_begin",
+      "exec_command_begin",
+      "exec_command_end",
+      "web_search_begin",
+      "image_generation_begin",
+      "patch_apply_begin",
+      "patch_apply_updated",
+      "plan_update",
+      "raw_response_item",
+      "stream_error",
+      "agent_message_content_delta",
+      "plan_delta",
+      "reasoning_content_delta",
+      "reasoning_raw_content_delta",
+      "exec_command_output_delta",
+      "request_permissions",
+      "request_user_input",
+      "elicitation_request",
+      "apply_patch_approval_request",
+      "exec_approval_request",
+    ]);
+
+    const keyFieldDocs = {
+      session_meta: "id/session_id、cwd、source、originator、cli_version、model_provider、base_instructions、dynamic_tools、git",
+      turn_context: "turn_id、cwd、workspace_roots、current_date/timezone、approval_policy、sandbox_policy、permission_profile、network、model、effort、collaboration_mode",
+      world_state: "full、state",
+      compacted: "message、replacement_history、window_number、first_window_id、previous_window_id、window_id",
+      inter_agent_communication: "author、recipient、other_recipients、content/encrypted_content、trigger_turn",
+      inter_agent_communication_metadata: "trigger_turn",
+      message: "role、content、phase、id",
+      agent_message: "record.type=response_item 时看 author/recipient/content；record.type=event_msg 时看 message/phase/memory_citation",
+      reasoning: "summary、content/encrypted_content",
+      function_call: "name、namespace、call_id、arguments",
+      function_call_output: "call_id、output",
+      custom_tool_call: "name、call_id、input、status",
+      custom_tool_call_output: "call_id、name、output",
+      tool_search_call: "call_id、execution、arguments、status",
+      tool_search_output: "call_id、tools、status、execution",
+      web_search_call: "status、action",
+      image_generation_call: "status、revised_prompt、result",
+      local_shell_call: "call_id、status、action",
+      compaction: "encrypted_content、id",
+      context_compaction: "encrypted_content、id",
+      user_message: "message、images/local_images、text_elements、client_id",
+      task_started: "turn_id、trace_id、started_at、model_context_window、collaboration_mode_kind",
+      turn_started: "turn_id、trace_id、started_at、model_context_window、collaboration_mode_kind",
+      task_complete: "turn_id、last_agent_message、completed_at、duration_ms、time_to_first_token_ms",
+      turn_complete: "turn_id、last_agent_message、completed_at、duration_ms、time_to_first_token_ms",
+      token_count: "total_token_usage、last_token_usage、model_context_window、rate limit 信息",
+      mcp_tool_call_end: "call_id、invocation.server/tool/arguments、duration、result",
+      patch_apply_end: "success/status、stdout、stderr、error",
+      thread_rolled_back: "num_turns",
+      turn_aborted: "turn_id、reason、message",
+      item_completed: "item.type；rollout 中通常只保留 Plan/Sleep",
+    };
+
+    function eventLayerInfo(type, event = null) {
+      const recordType = event?.recordType || "";
+      if (structureRecordTypes.has(recordType) || (!recordType && structureRecordTypes.has(type))) {
+        return {
+          layer: "持久化结构层",
+          persisted: "会写入 rollout，用于恢复/重放状态；它不是对话内容本身。",
+          source: `RolloutItem::${pascalCase(recordType || type)}`,
+          order: 0,
+        };
+      }
+      if (recordType === "response_item") {
+        return {
+          layer: "模型可见 item 层",
+          persisted: persistedResponseItemTypes.has(type)
+            ? "会写入 rollout，是恢复模型历史的核心 source of truth。"
+            : nonPersistedResponseItemTypes.has(type)
+              ? "源码 policy 默认不持久化此 ResponseItem。"
+              : "未在本地文档白名单中确认，按新版/实验 ResponseItem 处理。",
+          source: "ResponseItem",
+          order: 1,
+        };
+      }
+      if (recordType === "event_msg") {
+        if (type === "item_completed") {
+          return {
+            layer: "legacy/UI 事件层",
+            persisted: "只有内部 item 是 Plan 或 Sleep 时才会写入 rollout；其它 item_completed 通常被过滤或转换为对应事件。",
+            source: "EventMsg",
+            order: 2,
+          };
+        }
+        return {
+          layer: "legacy/UI 事件层",
+          persisted: persistedEventMsgTypes.has(type)
+            ? "在 rollout policy 白名单内，会作为 UI/回放/状态事件持久化。"
+            : usuallyRealtimeOnlyEventMsgTypes.has(type)
+              ? "通常只存在于实时事件流；默认不会写入 rollout。"
+              : "未在本地持久化白名单中确认，需结合具体 Codex 版本判断。",
+          source: "EventMsg",
+          order: 2,
+        };
+      }
+      if (persistedResponseItemTypes.has(type)) {
+        return {
+          layer: "模型可见 item 层",
+          persisted: "通常作为 record.type=response_item 写入 rollout。",
+          source: "ResponseItem",
+          order: 1,
+        };
+      }
+      if (persistedEventMsgTypes.has(type) || usuallyRealtimeOnlyEventMsgTypes.has(type)) {
+        return {
+          layer: "legacy/UI 事件层",
+          persisted: type === "item_completed"
+            ? "只有内部 item 是 Plan 或 Sleep 时才会写入 rollout。"
+            : persistedEventMsgTypes.has(type)
+            ? "通常作为 record.type=event_msg 写入 rollout。"
+            : "通常只存在于实时事件流；默认不会写入 rollout。",
+          source: "EventMsg",
+          order: 2,
+        };
+      }
+      return {
+        layer: "未知/兼容层",
+        persisted: "先看外层 record.type，再按 payload.type 和原始 payload 判断。",
+        source: "unknown",
+        order: 3,
+      };
+    }
+
+    function pascalCase(value) {
+      return String(value || "")
+        .split("_")
+        .filter(Boolean)
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join("");
+    }
+
     function eventDoc(type, event = null) {
       if (type === "agent_message" && event?.recordType === "response_item") {
-        return {
+        return withLayerInfo(type, event, {
           role: "ResponseItem::AgentMessage，多 agent 通信的模型可见 item。",
           watch: "重点看 author、recipient、content，以及 internal_chat_message_metadata_passthrough。它会作为模型历史 item 持久化，不是 EventMsg::AgentMessage 的纯展示事件。",
           direction: "模型上下文项/agent 间通信",
-        };
+        });
       }
       if (type === "agent_message" && event?.recordType === "event_msg") {
-        return {
+        return withLayerInfo(type, event, {
           role: "EventMsg::AgentMessage，legacy/UI 事件层的助手消息。",
           watch: "payload.message 是从 TurnItem::AgentMessage 投影出的纯文本展示事件。它经常和 response_item(type=message, role=assistant) 内容相同，但不保留完整结构化 content、id、role 和内部 metadata。",
           direction: "发送给客户端/UI 的助手展示事件",
-        };
+        });
       }
-      return eventTypeDocs[type] || {
+      return withLayerInfo(type, event, eventTypeDocs[type] || {
         role: "Codex rollout 或协议层记录的一类 item/event。",
         watch: "先看外层 record.type 判断它属于 RolloutItem 的哪一类，再看 payload.type。未知类型可能来自新版 Codex、旧版兼容字段或插件/实验特性。",
         direction: "需要结合 record.type 和 payload 判断",
+      });
+    }
+
+    function withLayerInfo(type, event, doc) {
+      const layer = eventLayerInfo(type, event);
+      return {
+        ...doc,
+        ...layer,
+        keyFields: keyFieldDocs[type] || "查看原始 payload 字段；优先用 record.type 确定语义层。",
       };
     }
 
@@ -1609,7 +1846,7 @@
         if (event.payload.role === "developer") return "developer 角色模型上下文项";
         if (event.payload.role === "system") return "system 角色模型上下文项";
       }
-      return eventDoc(event.eventType).direction;
+      return eventDoc(event.eventType, event).direction;
     }
 
     function messageLayerNote(event) {
@@ -1653,23 +1890,38 @@
 
     const eventDetailConfigs = {
       default: [
+        { label: "层级", value: ({ doc }) => `${doc.layer}；${doc.source}` },
+        { label: "持久化", value: ({ doc }) => doc.persisted },
         { label: "含义", value: ({ doc }) => doc.role },
+        { label: "重点字段", value: ({ doc }) => doc.keyFields },
       ],
       message: [
+        { label: "层级", value: ({ doc }) => `${doc.layer}；${doc.source}` },
+        { label: "持久化", value: ({ doc }) => doc.persisted },
         { label: "含义", value: ({ doc }) => doc.role },
+        { label: "重点字段", value: ({ doc }) => doc.keyFields },
         { label: "与 user_message 的区别", value: ({ event }) => userMessageDifferenceNote(event) },
         { label: "与 agent_message 的区别", value: ({ event }) => assistantMessageDifferenceNote(event) },
       ],
       user_message: [
+        { label: "层级", value: ({ doc }) => `${doc.layer}；${doc.source}` },
+        { label: "持久化", value: ({ doc }) => doc.persisted },
         { label: "含义", value: ({ doc }) => doc.role },
+        { label: "重点字段", value: ({ doc }) => doc.keyFields },
         { label: "与 message(role=user) 的区别", value: ({ event }) => userMessageDifferenceNote(event) },
       ],
       agent_message: [
+        { label: "层级", value: ({ doc }) => `${doc.layer}；${doc.source}` },
+        { label: "持久化", value: ({ doc }) => doc.persisted },
         { label: "含义", value: ({ doc }) => doc.role },
+        { label: "重点字段", value: ({ doc }) => doc.keyFields },
         { label: "与 message(role=assistant) 的区别", value: ({ event }) => assistantMessageDifferenceNote(event) },
       ],
       token_count: [
+        { label: "层级", value: ({ doc }) => `${doc.layer}；${doc.source}` },
+        { label: "持久化", value: ({ doc }) => doc.persisted },
         { label: "含义", value: ({ doc }) => doc.role },
+        { label: "重点字段", value: ({ doc }) => doc.keyFields },
       ],
     };
 
@@ -2919,7 +3171,7 @@
       ].join("");
       renderTurnIndex();
       renderBars(el.typeBars, [...metrics.counts.entries()].sort((a, b) => b[1] - a[1]));
-      renderTypeGuide([...metrics.counts.entries()].sort((a, b) => b[1] - a[1]).map(([type]) => type));
+      renderTypeGuide(state.events);
       const searchLabel = state.searchQuery ? " matching message payload search" : "";
       el.status.textContent = state.events.length ? `${state.filtered.length} of ${state.events.length} events shown${searchLabel}` : "No session loaded";
     }
@@ -2949,22 +3201,52 @@
       }).join("");
     }
 
-    function renderTypeGuide(types) {
-      if (!types.length) {
+    function renderTypeGuide(events) {
+      if (!events.length) {
         el.typeGuide.innerHTML = '<div class="notice">Load a session to see event explanations.</div>';
         return;
       }
-      el.typeGuide.innerHTML = types.map((type) => {
-        const doc = eventDoc(type);
+      const records = [...countByCompositeEvent(events).values()]
+        .sort((a, b) => a.doc.order - b.doc.order || b.count - a.count || a.label.localeCompare(b.label));
+      let previousLayer = "";
+      el.typeGuide.innerHTML = records.map((item) => {
+        const groupTitle = item.doc.layer !== previousLayer
+          ? `<div class="guide-group-title">${escapeHtml(item.doc.layer)}</div>`
+          : "";
+        previousLayer = item.doc.layer;
         return `
+          ${groupTitle}
           <div class="guide-card">
-            <strong>${escapeHtml(type)}</strong>
-            <span class="guide-meta">方向：${escapeHtml(doc.direction)}</span>
-            <span>${escapeHtml(doc.role)}</span>
-            <span>${escapeHtml(doc.watch)}</span>
+            <div class="guide-card-head">
+              <strong>${escapeHtml(item.label)}</strong>
+              <span class="guide-count">${item.count}</span>
+            </div>
+            <span class="guide-meta">${escapeHtml(item.doc.source)} · ${escapeHtml(item.doc.direction)}</span>
+            <span>${escapeHtml(item.doc.role)}</span>
+            <span>${escapeHtml(item.doc.persisted)}</span>
+            <span>重点字段：${escapeHtml(item.doc.keyFields)}</span>
           </div>
         `;
       }).join("");
+    }
+
+    function countByCompositeEvent(events) {
+      const map = new Map();
+      events.forEach((event) => {
+        const record = event.recordType || "-";
+        const type = event.eventType || "unknown";
+        const key = `${record}/${type}`;
+        if (!map.has(key)) {
+          const doc = eventDoc(type, event);
+          map.set(key, {
+            label: `${record} / ${type}`,
+            count: 0,
+            doc,
+          });
+        }
+        map.get(key).count += 1;
+      });
+      return map;
     }
 
     function elapsed(first, last) {
@@ -3076,6 +3358,7 @@
             <span>event type: ${highlightMatches(event.eventType)}</span>
             <span>record.type: ${highlightMatches(event.recordType || "-")}</span>
             <span>payload.type: ${highlightMatches(event.payload.type || "-")}</span>
+            <span>layer: ${highlightMatches(eventDoc(event.eventType, event).layer)}</span>
             ${event.payload.role ? `<span>role: ${highlightMatches(event.payload.role)}</span>` : ""}
             <span>turn: ${highlightMatches(event.turnIndex || "-")}</span>
             <span>flow: ${highlightMatches(event.flowLabel || "混合/未知")}</span>
