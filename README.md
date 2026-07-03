@@ -12,6 +12,7 @@
 - 可根据 `call_id` 在工具调用输入和输出之间跳转。
 - 支持导出脱敏后的 JSONL，默认会遮盖常见 token、Bearer authorization、JWT 和邮箱地址。
 - 提供本地 Responses WebSocket 抓包命令，可在不修改 Codex 源码的情况下记录模型 WebSocket 帧，见 [`WS_CAPTURE_PROXY.md`](./WS_CAPTURE_PROXY.md)。
+- 支持像浏览 session 一样浏览 WebSocket capture JSONL，按连接分组查看上行请求、下行响应、帧 payload 和原始记录。
 
 ## 快速开始
 

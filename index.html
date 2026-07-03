@@ -114,6 +114,14 @@
       display: none;
     }
 
+    .source-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+      min-width: 0;
+    }
+
     .connection-copy {
       display: grid;
       gap: 2px;
@@ -359,6 +367,22 @@
       color: var(--muted);
       font-family: var(--mono);
       font-size: 11px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .capture-pill {
+      justify-self: start;
+      border: 1px solid #c5d1df;
+      border-radius: 999px;
+      background: #f4f7fb;
+      color: var(--muted);
+      padding: 3px 7px;
+      font-size: 11px;
+      line-height: 1.2;
+      font-family: var(--mono);
+      max-width: 100%;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -1265,12 +1289,16 @@
       </div>
       <div class="action-row">
         <div class="session-browser">
-          <button class="button primary" id="chooseCodexDirButton" type="button">Choose .codex Directory</button>
+          <div class="source-actions">
+            <button class="button primary" id="chooseCodexDirButton" type="button">Choose .codex Directory</button>
+            <button class="button" id="chooseCaptureDirButton" type="button">Choose Captures</button>
+          </div>
           <div class="connection-copy">
             <strong class="connection-state" id="codexConnectionState">Connect your Codex sessions</strong>
             <span class="connection-detail" id="codexConnectionDetail">Mac users: choose the hidden <code>.codex</code> directory in your home folder.</span>
           </div>
           <input id="codexDirInput" type="file" webkitdirectory directory multiple>
+          <input id="captureDirInput" type="file" webkitdirectory directory multiple>
         </div>
         <div class="metrics top-metrics" id="metrics"></div>
         <div class="toolbar">
@@ -1350,8 +1378,35 @@
     </section>
   </div>
 
+  <div class="modal-backdrop" id="captureModal" hidden>
+    <section class="session-modal" role="dialog" aria-modal="true" aria-labelledby="captureModalTitle">
+      <div class="modal-head">
+        <div class="modal-title">
+          <strong id="captureModalTitle">Choose a WebSocket capture</strong>
+          <span>Select from capture JSONL files discovered under <code>captures/</code>.</span>
+          <span class="modal-count" id="captureCatalogMeta">No captures listed</span>
+        </div>
+        <button class="small-button" id="changeCaptureDirButton" type="button">Change Directory</button>
+        <button class="modal-close" id="closeCaptureModalButton" type="button" aria-label="Close capture chooser">×</button>
+      </div>
+      <div class="modal-controls">
+        <input class="control" id="captureCatalogFilter" type="search" placeholder="Filter by session id or file name">
+        <select class="control" id="captureCatalogSort" aria-label="Sort captures by time">
+          <option value="desc">Newest first</option>
+          <option value="asc">Oldest first</option>
+        </select>
+        <select class="control" id="captureCatalogView" aria-label="Capture view mode">
+          <option value="flat">Flat list</option>
+          <option value="session">Group by session</option>
+        </select>
+      </div>
+      <div class="session-list" id="captureCatalogList"></div>
+    </section>
+  </div>
+
   <script>
     const state = {
+      viewMode: "session",
       fileName: "",
       sessionSize: 0,
       rawLines: [],
@@ -1366,22 +1421,39 @@
       sessionCatalogView: "project",
       codexDirectoryHandle: null,
       codexDirectoryLabel: "",
+      captureCatalog: [],
+      captureCatalogFilter: "",
+      captureCatalogSort: "desc",
+      captureCatalogView: "flat",
+      captureDirectoryHandle: null,
+      captureDirectoryLabel: "",
+      activeCaptureMeta: null,
     };
 
     const el = {
       status: document.getElementById("status"),
       chooseCodexDirButton: document.getElementById("chooseCodexDirButton"),
+      chooseCaptureDirButton: document.getElementById("chooseCaptureDirButton"),
       codexConnectionState: document.getElementById("codexConnectionState"),
       codexConnectionDetail: document.getElementById("codexConnectionDetail"),
       changeCodexDirButton: document.getElementById("changeCodexDirButton"),
+      changeCaptureDirButton: document.getElementById("changeCaptureDirButton"),
       sessionCatalogFilter: document.getElementById("sessionCatalogFilter"),
       sessionCatalogSort: document.getElementById("sessionCatalogSort"),
       sessionCatalogView: document.getElementById("sessionCatalogView"),
       sessionCatalogList: document.getElementById("sessionCatalogList"),
       sessionCatalogMeta: document.getElementById("sessionCatalogMeta"),
+      captureCatalogFilter: document.getElementById("captureCatalogFilter"),
+      captureCatalogSort: document.getElementById("captureCatalogSort"),
+      captureCatalogView: document.getElementById("captureCatalogView"),
+      captureCatalogList: document.getElementById("captureCatalogList"),
+      captureCatalogMeta: document.getElementById("captureCatalogMeta"),
       sessionModal: document.getElementById("sessionModal"),
+      captureModal: document.getElementById("captureModal"),
       closeSessionModalButton: document.getElementById("closeSessionModalButton"),
+      closeCaptureModalButton: document.getElementById("closeCaptureModalButton"),
       codexDirInput: document.getElementById("codexDirInput"),
+      captureDirInput: document.getElementById("captureDirInput"),
       searchInput: document.getElementById("searchInput"),
       searchButton: document.getElementById("searchButton"),
       kindFilter: document.getElementById("kindFilter"),
@@ -2115,6 +2187,47 @@
       `;
     }
 
+    function capturePayloadPanel(event) {
+      if (state.viewMode !== "capture") return "";
+      const sections = [];
+      if (event.payload?.payload_json != null) {
+        sections.push({
+          title: "Parsed WebSocket Payload",
+          body: redact(event.payload.payload_json),
+          mono: true,
+        });
+      } else if (event.record?.payload_text) {
+        sections.push({
+          title: "WebSocket Payload Text",
+          body: redact(event.record.payload_text),
+          mono: true,
+        });
+      }
+      if (event.record?.request_headers?.length) {
+        sections.push({
+          title: "Request Headers",
+          body: redact(event.record.request_headers),
+          mono: true,
+        });
+      }
+      if (event.record?.upstream_response_headers?.length) {
+        sections.push({
+          title: "Upstream Response Headers",
+          body: redact(event.record.upstream_response_headers),
+          mono: true,
+        });
+      }
+      if (!sections.length) return "";
+      return `
+        <div class="section">
+          <h2>Capture Content</h2>
+          <div class="structured-text">
+            ${sections.map(renderStructuredSection).join("")}
+          </div>
+        </div>
+      `;
+    }
+
     function extractFunctionOutput(raw) {
       const parsed = parseMaybeJson(raw);
       if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && Object.prototype.hasOwnProperty.call(parsed, "body")) {
@@ -2800,6 +2913,144 @@
       };
     }
 
+    function headerValue(headers, name) {
+      const needle = String(name || "").toLowerCase();
+      const item = (headers || []).find((header) => String(header.name || "").toLowerCase() === needle);
+      return item?.value || "";
+    }
+
+    function parseJsonText(value) {
+      if (!value || typeof value !== "string") return null;
+      try {
+        return JSON.parse(value);
+      } catch (_) {
+        return null;
+      }
+    }
+
+    function capturePayloadJson(record) {
+      if (record.payload_json && typeof record.payload_json === "object") return record.payload_json;
+      return parseJsonText(record.payload_text) || null;
+    }
+
+    function captureMetadata(record) {
+      const turnMetadata = parseJsonText(headerValue(record.request_headers, "x-codex-turn-metadata")) || {};
+      return {
+        sessionId: record.session_id || turnMetadata.session_id || headerValue(record.request_headers, "session-id") || "",
+        threadId: record.thread_id || turnMetadata.thread_id || headerValue(record.request_headers, "thread-id") || "",
+        turnId: record.turn_id || turnMetadata.turn_id || "",
+        requestKind: record.request_kind || turnMetadata.request_kind || "",
+        startedAtUnixMs: Number(turnMetadata.turn_started_at_unix_ms) || 0,
+      };
+    }
+
+    function captureEventType(record, payloadJson) {
+      if (record.type === "websocket_frame") return payloadJson?.type || record.json_type || `${record.direction || "unknown"}_frame`;
+      return record.type || "capture_record";
+    }
+
+    function captureTitle(record, payloadJson, eventType) {
+      if (record.type === "websocket_connect") return "WebSocket connect";
+      if (record.type === "websocket_connected") return "WebSocket connected";
+      if (record.type === "connection_error" || record.type === "websocket_relay_error") return "Capture error";
+      if (record.type === "http_request") return `${record.method || "HTTP"} ${record.target || ""}`.trim();
+      if (record.type === "http_response_start") return `HTTP ${record.status || "response"}`;
+      if (record.type === "http_response_chunk") return "HTTP response chunk";
+      if (record.type === "websocket_frame") {
+        const direction = record.direction === "client_to_upstream" ? "client -> upstream" : record.direction === "upstream_to_client" ? "upstream -> client" : record.direction || "frame";
+        return `${direction}: ${eventType}`;
+      }
+      return eventType;
+    }
+
+    function summarizeCapturePayload(record, payloadJson) {
+      if (record.type === "websocket_connect") {
+        const metadata = captureMetadata(record);
+        return [
+          `session ${metadata.sessionId || "-"}`,
+          `turn ${metadata.turnId || "-"}`,
+          `kind ${metadata.requestKind || "-"}`,
+          record.upstream_url || "",
+        ].filter(Boolean).join("\n");
+      }
+      if (record.type === "websocket_connected") {
+        return `upstream accepted · ${record.upstream_response_headers?.length || 0} headers`;
+      }
+      if (record.type === "connection_error" || record.type === "websocket_relay_error") {
+        return record.error || "";
+      }
+      if (record.type === "websocket_frame") {
+        if (payloadJson && typeof payloadJson === "object") {
+          return [
+            payloadJson.type,
+            payloadJson.model ? `model ${payloadJson.model}` : "",
+            payloadJson.item?.type ? `item ${payloadJson.item.type}` : "",
+            payloadJson.response?.status ? `status ${payloadJson.response.status}` : "",
+            record.payload_bytes ? `${record.payload_bytes} bytes` : "",
+          ].filter(Boolean).join("\n") || JSON.stringify(payloadJson);
+        }
+        return record.payload_text || (record.payload_base64 ? `[base64 ${record.payload_bytes || 0} bytes]` : "");
+      }
+      if (record.body) return textFromOutput(record.body);
+      if (record.payload_text) return record.payload_text;
+      return JSON.stringify(record);
+    }
+
+    function normalizeCaptureRecord(record, lineNumber, connectionIndexes) {
+      const payloadJson = capturePayloadJson(record);
+      const eventType = captureEventType(record, payloadJson);
+      const connectionId = record.connection_id || "unknown";
+      if (!connectionIndexes.has(connectionId)) connectionIndexes.set(connectionId, connectionIndexes.size + 1);
+      const connectionIndex = connectionIndexes.get(connectionId);
+      const metadata = captureMetadata(record);
+      const summary = redact(summarizeCapturePayload(record, payloadJson));
+      const title = captureTitle(record, payloadJson, eventType);
+      const timestamp = record.wall_time_unix_ms ? new Date(record.wall_time_unix_ms).toISOString() : "";
+      return {
+        id: `capture:${lineNumber}:${connectionId}:${record.frame_seq || record.type || eventType}`,
+        lineNumber,
+        timestamp,
+        recordType: record.type || "",
+        eventType,
+        title,
+        callId: record.frame_seq ? `frame ${record.frame_seq}` : connectionId,
+        payload: {
+          type: eventType,
+          direction: record.direction || "",
+          opcode_name: record.opcode_name || "",
+          payload_bytes: record.payload_bytes || 0,
+          payload_json: payloadJson,
+          session_id: metadata.sessionId,
+          thread_id: metadata.threadId,
+          turn_id: metadata.turnId,
+          request_kind: metadata.requestKind,
+        },
+        record,
+        fullPreview: summary,
+        preview: compact(summary, 600),
+        searchText: [
+          timestamp,
+          record.type,
+          eventType,
+          title,
+          connectionId,
+          record.direction,
+          metadata.sessionId,
+          metadata.turnId,
+          summary,
+        ].join("\n").toLowerCase(),
+        turnKey: `connection:${connectionId}`,
+        turnIndex: `Connection ${connectionIndex}`,
+        turnSummary: [
+          connectionId,
+          metadata.requestKind ? `kind ${metadata.requestKind}` : "",
+          metadata.turnId ? `turn ${metadata.turnId}` : "",
+        ].filter(Boolean).join(" · "),
+        flowKind: record.direction === "client_to_upstream" ? "upstream" : record.direction === "upstream_to_client" ? "downstream" : "runtime",
+        flowLabel: record.direction === "client_to_upstream" ? "上行请求" : record.direction === "upstream_to_client" ? "下行响应" : "运行状态",
+      };
+    }
+
     function userMessageSummary(event) {
       if (event.eventType === "user_message") {
         return compact(textFromOutput(event.payload.message || event.payload.content), 120);
@@ -2907,7 +3158,24 @@
       return { lines, events, errors };
     }
 
+    function parseCaptureJsonl(text) {
+      const lines = text.split(/\r?\n/);
+      const events = [];
+      const errors = [];
+      const connectionIndexes = new Map();
+      lines.forEach((line, index) => {
+        if (!line.trim()) return;
+        try {
+          events.push(normalizeCaptureRecord(JSON.parse(line), index + 1, connectionIndexes));
+        } catch (error) {
+          errors.push({ line: index + 1, error: error.message });
+        }
+      });
+      return { lines, events, errors };
+    }
+
     function computeMetrics(events) {
+      if (state.viewMode === "capture") return computeCaptureMetrics(events);
       const counts = countBy(events, (event) => event.eventType);
       const calls = events.filter((event) => /call$/i.test(event.eventType) && !event.eventType.includes("output"));
       const outputs = events.filter((event) => event.eventType.includes("output"));
@@ -2923,6 +3191,26 @@
         started,
         completed,
         duration,
+      };
+    }
+
+    function computeCaptureMetrics(events) {
+      const counts = countBy(events, (event) => event.eventType);
+      const connections = new Set(events.map((event) => event.record.connection_id).filter(Boolean));
+      const frames = events.filter((event) => event.recordType === "websocket_frame");
+      const upstream = frames.filter((event) => event.payload.direction === "client_to_upstream");
+      const downstream = frames.filter((event) => event.payload.direction === "upstream_to_client");
+      return {
+        counts,
+        calls: upstream,
+        outputs: downstream,
+        started: events.find((event) => event.recordType === "websocket_connect"),
+        completed: [...events].reverse().find((event) => event.recordType === "websocket_connected" || event.eventType === "response.completed"),
+        duration: "",
+        connections,
+        frames,
+        upstream,
+        downstream,
       };
     }
 
@@ -2964,6 +3252,7 @@
       el.kindFilter.innerHTML = '<option value="all">All event types</option>' +
         types.map((type) => `<option value="${escapeHtml(type)}">${escapeHtml(type)}</option>`).join("");
       if (types.includes(previous)) el.kindFilter.value = previous;
+      else el.kindFilter.value = "all";
     }
 
     function groupTurns(events) {
@@ -2982,6 +3271,11 @@
         });
       });
       return groups;
+    }
+
+    function groupDisplayTitle(group) {
+      if (state.viewMode === "capture") return group.index || "Connection";
+      return group.index === "Setup" ? "Session Setup" : `Turn ${group.index || "-"}`;
     }
 
     function tokenUsageFromEvent(event, scope) {
@@ -3148,7 +3442,8 @@
       const query = state.searchQuery.trim().toLowerCase();
       const kind = el.kindFilter.value;
       state.filtered = state.events.filter((event) => {
-        if (query && (event.eventType !== "message" || !messagePayloadSearchText(event).includes(query))) return false;
+        if (query && state.viewMode === "capture" && !event.searchText.includes(query)) return false;
+        if (query && state.viewMode !== "capture" && (event.eventType !== "message" || !messagePayloadSearchText(event).includes(query))) return false;
         if (!query && kind !== "all" && event.eventType !== kind) return false;
         return true;
       });
@@ -3160,25 +3455,34 @@
 
     function renderSidebar() {
       const metrics = computeMetrics(state.events);
-      const turnCount = state.events.length
-        ? groupTurns(state.events).filter((group) => group.key !== "setup").length
-        : 0;
+      const groupCount = state.viewMode === "capture"
+        ? (metrics.connections?.size || groupTurns(state.events).length)
+        : (state.events.length ? groupTurns(state.events).filter((group) => group.key !== "setup").length : 0);
+      const secondMetric = state.viewMode === "capture"
+        ? metricHtml(metrics.frames?.length || 0, "ws帧")
+        : metricHtml(state.events.length, "events");
+      const thirdMetric = state.viewMode === "capture"
+        ? metricHtml(`${metrics.upstream?.length || 0}/${metrics.downstream?.length || 0}`, "上/下行")
+        : metricHtml(formatBytes(state.sessionSize), "session大小");
+      const fourthMetric = state.viewMode === "capture"
+        ? metricHtml(formatBytes(state.sessionSize), "capture大小")
+        : metricHtml(formatTokenNumber(currentSessionTotalTokens(state.events)), "总token");
       el.metrics.innerHTML = [
-        metricHtml(turnCount, "会话"),
-        metricHtml(state.events.length, "events"),
-        metricHtml(formatBytes(state.sessionSize), "session大小"),
-        metricHtml(formatTokenNumber(currentSessionTotalTokens(state.events)), "总token"),
+        metricHtml(groupCount, state.viewMode === "capture" ? "连接" : "会话"),
+        secondMetric,
+        thirdMetric,
+        fourthMetric,
       ].join("");
       renderTurnIndex();
       renderBars(el.typeBars, [...metrics.counts.entries()].sort((a, b) => b[1] - a[1]));
       renderTypeGuide(state.events);
-      const searchLabel = state.searchQuery ? " matching message payload search" : "";
-      el.status.textContent = state.events.length ? `${state.filtered.length} of ${state.events.length} events shown${searchLabel}` : "No session loaded";
+      const searchLabel = state.searchQuery ? (state.viewMode === "capture" ? " matching capture search" : " matching message payload search") : "";
+      el.status.textContent = state.events.length ? `${state.filtered.length} of ${state.events.length} events shown${searchLabel}` : (state.viewMode === "capture" ? "No capture loaded" : "No session loaded");
     }
 
     function renderTurnIndex() {
       if (!state.events.length) {
-        el.turnIndex.innerHTML = '<div class="notice">Load a session to see turns.</div>';
+        el.turnIndex.innerHTML = `<div class="notice">${state.viewMode === "capture" ? "Load a capture to see WebSocket connections." : "Load a session to see turns."}</div>`;
         return;
       }
       const filteredCounts = countBy(state.filtered, (event) => event.turnKey);
@@ -3186,16 +3490,19 @@
       const tokenStats = computeTurnTokenStats(state.events);
       const durationStats = computeTurnDurationStats(state.events);
       el.turnIndex.innerHTML = groups.map((group) => {
-        const title = group.index === "Setup" ? "Session Setup" : `Turn ${group.index || "-"}`;
+        const title = groupDisplayTitle(group);
         const filteredCount = filteredCounts.get(group.key) || 0;
         const stats = tokenStats.get(group.key);
         const duration = durationStats.get(group.key);
         const disabled = filteredCount ? "" : " disabled";
+        const meta = state.viewMode === "capture"
+          ? `${group.events.length} records · ${group.summary || "No connection metadata"}`
+          : `${turnDurationLabel(duration)} · ${turnTokenLabel(stats)} · ${group.summary || "No user message summary available"}`;
         return `
           <button class="turn-link" type="button" data-turn-jump="${escapeHtml(group.key)}"${disabled}>
             <strong>${escapeHtml(title)}</strong>
             <span class="turn-hit-count">${filteredCount}/${group.events.length}</span>
-            <span>${escapeHtml(turnDurationLabel(duration))} · ${escapeHtml(turnTokenLabel(stats))} · ${escapeHtml(group.summary || "No user message summary available")}</span>
+            <span>${escapeHtml(meta)}</span>
           </button>
         `;
       }).join("");
@@ -3203,7 +3510,22 @@
 
     function renderTypeGuide(events) {
       if (!events.length) {
-        el.typeGuide.innerHTML = '<div class="notice">Load a session to see event explanations.</div>';
+        el.typeGuide.innerHTML = `<div class="notice">${state.viewMode === "capture" ? "Load a capture to see WebSocket record explanations." : "Load a session to see event explanations."}</div>`;
+        return;
+      }
+      if (state.viewMode === "capture") {
+        const records = [...countBy(events, (event) => `${event.recordType || "-"} / ${event.eventType || "unknown"}`).entries()]
+          .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+        el.typeGuide.innerHTML = records.map(([label, count]) => `
+          <div class="guide-card">
+            <div class="guide-card-head">
+              <strong>${escapeHtml(label)}</strong>
+              <span class="guide-count">${count}</span>
+            </div>
+            <span class="guide-meta">Responses WebSocket capture record</span>
+            <span>${escapeHtml(captureGuideText(label))}</span>
+          </div>
+        `).join("");
         return;
       }
       const records = [...countByCompositeEvent(events).values()]
@@ -3228,6 +3550,15 @@
           </div>
         `;
       }).join("");
+    }
+
+    function captureGuideText(label) {
+      if (label.includes("websocket_connect")) return "本地 Codex 发起 WebSocket upgrade，请看 request_headers、session-id、thread-id、x-codex-turn-metadata。";
+      if (label.includes("websocket_connected")) return "代理到上游的 WebSocket upgrade 成功，请看 upstream_response_headers。";
+      if (label.includes("websocket_frame")) return "一帧 WebSocket 数据；direction 表示上行/下行，payload_json 是解码后的 Responses 事件或请求。";
+      if (label.includes("connection_error")) return "代理或上游连接错误。";
+      if (label.includes("http_")) return "HTTP/SSE fallback 记录。";
+      return "抓包代理写入的传输层记录。";
     }
 
     function countByCompositeEvent(events) {
@@ -3284,7 +3615,7 @@
       if (!state.events.length) {
         el.timeline.innerHTML = `
           <div class="empty">
-            <div><strong>Choose your <code>.codex</code> directory</strong><br>Then pick a session from <code>sessions/</code>.</div>
+            <div><strong>Choose a source</strong><br>Pick a Codex session or WebSocket capture JSONL.</div>
           </div>`;
         return;
       }
@@ -3298,9 +3629,19 @@
 
       el.timeline.innerHTML = groups.map((group) => {
         const collapsed = state.collapsedTurns.has(group.key);
-        const turnTitle = group.index === "Setup" ? "Session Setup" : `Turn ${group.index || "-"}`;
+        const turnTitle = groupDisplayTitle(group);
         const stats = tokenStats.get(group.key);
         const duration = durationStats.get(group.key);
+        const turnMeta = state.viewMode === "capture"
+          ? `<span class="turn-count">${group.events.length} record${group.events.length === 1 ? "" : "s"}</span>`
+          : `
+              <span class="turn-duration" title="${escapeHtml(turnDurationTitle(duration))}">${escapeHtml(turnDurationLabel(duration))}</span>
+              <span class="turn-token" title="${escapeHtml(turnTokenTitle(stats))}">${escapeHtml(turnTokenLabel(stats))}</span>
+              <span class="turn-count">${group.events.length} event${group.events.length === 1 ? "" : "s"}</span>
+            `;
+        const summary = state.viewMode === "capture"
+          ? (group.summary || "No connection metadata")
+          : (group.summary || "No user message summary available");
         const divider = `
           <div class="turn-divider${collapsed ? " collapsed" : ""}" data-turn-key="${escapeHtml(group.key)}">
             <button class="turn-toggle" type="button" data-turn-toggle="${escapeHtml(group.key)}" aria-expanded="${collapsed ? "false" : "true"}" title="${collapsed ? "Expand turn" : "Collapse turn"}">
@@ -3308,11 +3649,9 @@
               <strong>${escapeHtml(turnTitle)}</strong>
             </button>
             <div class="turn-meta">
-              <span class="turn-duration" title="${escapeHtml(turnDurationTitle(duration))}">${escapeHtml(turnDurationLabel(duration))}</span>
-              <span class="turn-token" title="${escapeHtml(turnTokenTitle(stats))}">${escapeHtml(turnTokenLabel(stats))}</span>
-              <span class="turn-count">${group.events.length} event${group.events.length === 1 ? "" : "s"}</span>
+              ${turnMeta}
             </div>
-            <span class="turn-summary">${escapeHtml(group.summary || "No user message summary available")}</span>
+            <span class="turn-summary">${escapeHtml(summary)}</span>
           </div>
         `;
         if (collapsed) return divider;
@@ -3350,11 +3689,23 @@
       const tokenPanel = tokenUsagePanel(event);
       const contextPanel = turnContextPanel(event);
       const patchPanel = patchInputPanel(event);
+      const capturePanel = capturePayloadPanel(event);
       const detailRows = detailRowsForEvent(event);
-      el.details.innerHTML = `
-        <div class="detail-head">
-          <h2>${highlightMatches(event.title)}</h2>
-          <div class="detail-meta">
+      const metaRows = state.viewMode === "capture"
+        ? `
+            <span>capture record: ${highlightMatches(event.recordType || "-")}</span>
+            <span>event type: ${highlightMatches(event.eventType)}</span>
+            <span>direction: ${highlightMatches(event.payload.direction || "-")}</span>
+            <span>connection: ${highlightMatches(event.record.connection_id || "-")}</span>
+            <span>frame: ${highlightMatches(event.record.frame_seq || "-")}</span>
+            <span>opcode: ${highlightMatches(event.payload.opcode_name || "-")}</span>
+            <span>bytes: ${highlightMatches(event.payload.payload_bytes || "-")}</span>
+            <span>session: ${highlightMatches(event.payload.session_id || "-")}</span>
+            <span>turn: ${highlightMatches(event.payload.turn_id || "-")}</span>
+            <span>time: ${highlightMatches(event.timestamp || "-")}</span>
+            <span>line: ${event.lineNumber}</span>
+          `
+        : `
             <span>event type: ${highlightMatches(event.eventType)}</span>
             <span>record.type: ${highlightMatches(event.recordType || "-")}</span>
             <span>payload.type: ${highlightMatches(event.payload.type || "-")}</span>
@@ -3367,10 +3718,15 @@
             <span>call: ${highlightMatches(event.callId || "-")}</span>
             <span>paired line: ${highlightMatches(event.pairLine || "-")}</span>
             <span>full summary chars: ${fullSummary.length}</span>
+          `;
+      const noticeRows = state.viewMode === "capture" ? "" : renderDetailRows(detailRows);
+      el.details.innerHTML = `
+        <div class="detail-head">
+          <h2>${highlightMatches(event.title)}</h2>
+          <div class="detail-meta">
+            ${metaRows}
           </div>
-          <div class="notice">
-            ${renderDetailRows(detailRows)}
-          </div>
+          ${noticeRows ? `<div class="notice">${noticeRows}</div>` : ""}
         </div>
         <div class="detail-actions">
           <button class="small-button" id="copyEvent">Copy Event</button>
@@ -3382,6 +3738,7 @@
         ${tokenPanel}
         ${contextPanel}
         ${patchPanel}
+        ${capturePanel}
         <pre id="detailPre">${highlightMatches(redactedRecord)}</pre>
       `;
       document.getElementById("copyEvent").addEventListener("click", async () => {
@@ -3756,6 +4113,169 @@
       return sessions.sort((a, b) => b.timestampMs - a.timestampMs || a.path.localeCompare(b.path));
     }
 
+    function isCaptureCandidate(name) {
+      return /\.jsonl$/i.test(name || "");
+    }
+
+    function captureCatalogId(path, file) {
+      return `${path || file.name}:${file.size}:${file.lastModified}`;
+    }
+
+    function parseCaptureCatalogMeta(text, path, file) {
+      const lines = String(text || "").split(/\r?\n/).filter((line) => line.trim());
+      let sessionId = extractSessionIdFromPath(path || file.name);
+      let timestampMs = Number(file.lastModified) || Date.now();
+      let recordCount = 0;
+      const connections = new Set();
+      const typeCounts = new Map();
+      for (const line of lines) {
+        let record;
+        try {
+          record = JSON.parse(line);
+        } catch (_) {
+          continue;
+        }
+        recordCount += 1;
+        if (record.session_id) sessionId = record.session_id;
+        if (record.connection_id) connections.add(record.connection_id);
+        const type = record.type || "unknown";
+        typeCounts.set(type, (typeCounts.get(type) || 0) + 1);
+        if (record.wall_time_unix_ms && timestampMs === (Number(file.lastModified) || timestampMs)) {
+          timestampMs = Number(record.wall_time_unix_ms) || timestampMs;
+        }
+      }
+      const topTypes = [...typeCounts.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3)
+        .map(([type, count]) => `${type} ${count}`)
+        .join(" · ");
+      return {
+        sessionId,
+        timestampMs,
+        dateLabel: formatFileModified(timestampMs),
+        recordCount,
+        connectionCount: connections.size,
+        description: topTypes || "No capture records found.",
+      };
+    }
+
+    async function buildCaptureCatalogItem(file, path) {
+      const sample = await file.slice(0, Math.min(file.size, 1024 * 1024)).text();
+      const meta = parseCaptureCatalogMeta(sample, path, file);
+      return {
+        id: captureCatalogId(path, file),
+        name: file.name,
+        path,
+        file,
+        size: file.size,
+        lastModified: file.lastModified,
+        ...meta,
+      };
+    }
+
+    async function collectCapturesFromDirectoryHandle(dirHandle) {
+      const captures = [];
+      let rootHandle = dirHandle;
+      let rootPrefix = dirHandle.name || "";
+      try {
+        const nested = await dirHandle.getDirectoryHandle("responses-websocket");
+        rootHandle = nested;
+        rootPrefix = rootPrefix ? `${rootPrefix}/responses-websocket` : "responses-websocket";
+      } catch (_) {
+        // The selected directory may already be responses-websocket.
+      }
+
+      async function walk(handle, prefix) {
+        for await (const [name, entry] of handle.entries()) {
+          const path = prefix ? `${prefix}/${name}` : name;
+          if (entry.kind === "directory") {
+            await walk(entry, path);
+            continue;
+          }
+          if (!isCaptureCandidate(name)) continue;
+          const file = await entry.getFile();
+          captures.push(await buildCaptureCatalogItem(file, path));
+        }
+      }
+
+      await walk(rootHandle, rootPrefix);
+      return captures.sort((a, b) => b.timestampMs - a.timestampMs || a.path.localeCompare(b.path));
+    }
+
+    async function collectCapturesFromFileList(files) {
+      const candidates = [...files]
+        .filter((file) => isCaptureCandidate(file.name))
+        .map((file) => ({ file, path: file.webkitRelativePath || file.name }));
+      const captures = [];
+      for (let index = 0; index < candidates.length; index += 1) {
+        if (index % 50 === 0) el.status.textContent = `Listing captures... ${index}/${candidates.length}`;
+        const item = candidates[index];
+        captures.push(await buildCaptureCatalogItem(item.file, item.path));
+      }
+      return captures.sort((a, b) => b.timestampMs - a.timestampMs || a.path.localeCompare(b.path));
+    }
+
+    function visibleCatalogCaptures() {
+      const query = state.captureCatalogFilter.trim().toLowerCase();
+      return state.captureCatalog
+        .filter((item) => {
+          if (!query) return true;
+          return [item.sessionId, item.name, item.path].some((value) => String(value || "").toLowerCase().includes(query));
+        })
+        .sort((a, b) => {
+          const direction = state.captureCatalogSort === "asc" ? 1 : -1;
+          return direction * ((a.timestampMs || 0) - (b.timestampMs || 0)) || a.path.localeCompare(b.path);
+        });
+    }
+
+    function captureRowHtml(item) {
+      return `
+        <button class="session-row" type="button" data-capture-id="${escapeHtml(item.id)}" title="${escapeHtml(item.path)}">
+          <div class="session-row-head">
+            <span class="session-date">${escapeHtml(item.dateLabel)}</span>
+            <span class="session-id">${escapeHtml(item.sessionId)}</span>
+          </div>
+          <div class="capture-pill">${escapeHtml(item.connectionCount)} conn · ${escapeHtml(item.recordCount)} records · ${escapeHtml(formatBytes(item.size))}</div>
+          <div class="session-desc">${escapeHtml(item.description)}</div>
+          <div class="session-path">${escapeHtml(item.path)}</div>
+        </button>
+      `;
+    }
+
+    function groupedCaptureCatalogHtml(captures) {
+      const groups = new Map();
+      captures.forEach((item) => {
+        const key = item.sessionId || "unknown";
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(item);
+      });
+      return [...groups.entries()].map(([sessionId, items]) => `
+        <div class="session-project-group">${escapeHtml(sessionId)} · ${items.length}</div>
+        ${items.map(captureRowHtml).join("")}
+      `).join("");
+    }
+
+    function renderCaptureCatalog() {
+      const captures = visibleCatalogCaptures();
+
+      if (!state.captureCatalog.length) {
+        el.captureCatalogMeta.textContent = "No captures listed";
+        el.captureCatalogList.innerHTML = '<div class="empty">Choose your captures directory to list WebSocket JSONL files.</div>';
+        return;
+      }
+
+      el.captureCatalogMeta.textContent = `${captures.length} of ${state.captureCatalog.length} captures shown`;
+
+      if (!captures.length) {
+        el.captureCatalogList.innerHTML = '<div class="empty">No captures match this filter.</div>';
+        return;
+      }
+
+      el.captureCatalogList.innerHTML = state.captureCatalogView === "session"
+        ? groupedCaptureCatalogHtml(captures)
+        : captures.map(captureRowHtml).join("");
+    }
+
     async function loadCatalogFromDirectoryHandle(dirHandle) {
       el.status.textContent = "Scanning .codex/sessions...";
       const sessions = await collectSessionsFromDirectoryHandle(dirHandle);
@@ -3777,6 +4297,25 @@
       el.status.textContent = sessions.length
         ? `${sessions.length} sessions listed from ${sourceLabel}`
         : `No session files found under ${sourceLabel}`;
+    }
+
+    async function loadCaptureCatalogFromDirectoryHandle(dirHandle) {
+      el.status.textContent = "Scanning captures...";
+      const captures = await collectCapturesFromDirectoryHandle(dirHandle);
+      state.captureDirectoryHandle = dirHandle;
+      state.captureDirectoryLabel = dirHandle.name || "captures";
+      state.captureCatalog = captures;
+      state.captureCatalogFilter = "";
+      state.captureCatalogSort = "desc";
+      state.captureCatalogView = "flat";
+      el.captureCatalogFilter.value = "";
+      el.captureCatalogSort.value = state.captureCatalogSort;
+      el.captureCatalogView.value = state.captureCatalogView;
+      renderCaptureCatalog();
+      openCaptureModal();
+      el.status.textContent = captures.length
+        ? `${captures.length} captures listed from ${state.captureDirectoryLabel}`
+        : `No capture JSONL files found under ${state.captureDirectoryLabel}`;
     }
 
     async function chooseCodexDirectory(options = {}) {
@@ -3808,6 +4347,31 @@
           return;
         }
         el.status.textContent = `Could not list sessions: ${error.message}`;
+      }
+    }
+
+    async function chooseCaptureDirectory(options = {}) {
+      if (!options.forcePicker && state.captureCatalog.length) {
+        openCaptureModal();
+        return;
+      }
+
+      el.status.textContent = "Choose captures or responses-websocket directory";
+      if (!window.showDirectoryPicker) {
+        el.captureDirInput.value = "";
+        el.captureDirInput.click();
+        return;
+      }
+
+      try {
+        const dirHandle = await window.showDirectoryPicker({ mode: "read" });
+        await loadCaptureCatalogFromDirectoryHandle(dirHandle);
+      } catch (error) {
+        if (error.name === "AbortError") {
+          el.status.textContent = "Capture directory selection cancelled";
+          return;
+        }
+        el.status.textContent = `Could not list captures: ${error.message}`;
       }
     }
 
@@ -3880,6 +4444,16 @@
       el.sessionModal.hidden = true;
     }
 
+    function openCaptureModal() {
+      renderCaptureCatalog();
+      el.captureModal.hidden = false;
+      requestAnimationFrame(() => el.captureCatalogFilter.focus());
+    }
+
+    function closeCaptureModal() {
+      el.captureModal.hidden = true;
+    }
+
     async function loadCatalogSessionById(id) {
       const item = state.sessionCatalog.find((session) => session.id === id);
       if (!item) {
@@ -3890,8 +4464,30 @@
       await loadLocatedSession(item.file, item.path);
     }
 
+    async function loadCatalogCaptureById(id) {
+      const item = state.captureCatalog.find((capture) => capture.id === id);
+      if (!item) {
+        el.status.textContent = "Choose a listed capture first";
+        return;
+      }
+      closeCaptureModal();
+      const text = await item.file.text();
+      state.sessionSize = item.size || 0;
+      await loadCaptureText(text, item.path || item.name, item);
+      el.status.textContent = `${state.events.length} capture records loaded from ${item.path || item.name}`;
+    }
+
     async function loadSessionText(text, name) {
+      state.viewMode = "session";
+      state.activeCaptureMeta = null;
       state.fileName = name || "session.jsonl";
+      state.searchQuery = "";
+      el.searchInput.value = "";
+      el.kindFilter.value = "all";
+      el.searchInput.placeholder = "Search message payload";
+      el.codexConnectionState.textContent = state.codexDirectoryLabel ? "Connected to .codex" : "Viewing Codex session";
+      el.codexConnectionState.classList.toggle("connected", Boolean(state.codexDirectoryLabel));
+      el.codexConnectionDetail.textContent = state.codexDirectoryLabel || state.fileName;
       el.status.textContent = "Parsing...";
       const parsed = parseJsonl(text);
       state.rawLines = parsed.lines;
@@ -3902,6 +4498,32 @@
       renderAll();
       if (parsed.errors.length) {
         el.status.textContent = `${state.events.length} events loaded, ${parsed.errors.length} parse errors`;
+      }
+    }
+
+    async function loadCaptureText(text, name, meta = null) {
+      state.viewMode = "capture";
+      state.activeCaptureMeta = meta;
+      state.fileName = name || "capture.jsonl";
+      state.searchQuery = "";
+      el.searchInput.value = "";
+      el.kindFilter.value = "all";
+      el.status.textContent = "Parsing capture...";
+      const parsed = parseCaptureJsonl(text);
+      state.rawLines = parsed.lines;
+      state.events = parsed.events;
+      state.selectedId = state.events[0]?.id || null;
+      state.collapsedTurns.clear();
+      el.exportButton.disabled = !state.events.length;
+      el.searchInput.placeholder = "Search capture payload";
+      el.codexConnectionState.textContent = "Viewing WebSocket capture";
+      el.codexConnectionState.classList.add("connected");
+      el.codexConnectionDetail.textContent = state.activeCaptureMeta
+        ? `${state.activeCaptureMeta.sessionId || "unknown session"} · ${state.activeCaptureMeta.connectionCount || 0} connections · ${formatBytes(state.activeCaptureMeta.size || 0)}`
+        : state.fileName;
+      renderAll();
+      if (parsed.errors.length) {
+        el.status.textContent = `${state.events.length} capture records loaded, ${parsed.errors.length} parse errors`;
       }
     }
 
@@ -3922,6 +4544,10 @@
       chooseCodexDirectory();
     });
 
+    el.chooseCaptureDirButton.addEventListener("click", () => {
+      chooseCaptureDirectory();
+    });
+
     el.sessionCatalogFilter.addEventListener("input", () => {
       state.sessionCatalogFilter = el.sessionCatalogFilter.value;
       renderSessionCatalog();
@@ -3937,24 +4563,55 @@
       renderSessionCatalog();
     });
 
+    el.captureCatalogFilter.addEventListener("input", () => {
+      state.captureCatalogFilter = el.captureCatalogFilter.value;
+      renderCaptureCatalog();
+    });
+
+    el.captureCatalogSort.addEventListener("change", () => {
+      state.captureCatalogSort = el.captureCatalogSort.value;
+      renderCaptureCatalog();
+    });
+
+    el.captureCatalogView.addEventListener("change", () => {
+      state.captureCatalogView = el.captureCatalogView.value;
+      renderCaptureCatalog();
+    });
+
     el.sessionCatalogList.addEventListener("click", (event) => {
       const row = event.target.closest("[data-session-id]");
       if (!row) return;
       loadCatalogSessionById(row.dataset.sessionId);
     });
 
+    el.captureCatalogList.addEventListener("click", (event) => {
+      const row = event.target.closest("[data-capture-id]");
+      if (!row) return;
+      loadCatalogCaptureById(row.dataset.captureId);
+    });
+
     el.changeCodexDirButton.addEventListener("click", () => {
       chooseCodexDirectory({ forcePicker: true });
     });
 
+    el.changeCaptureDirButton.addEventListener("click", () => {
+      chooseCaptureDirectory({ forcePicker: true });
+    });
+
     el.closeSessionModalButton.addEventListener("click", closeSessionModal);
+    el.closeCaptureModalButton.addEventListener("click", closeCaptureModal);
 
     el.sessionModal.addEventListener("click", (event) => {
       if (event.target === el.sessionModal) closeSessionModal();
     });
 
+    el.captureModal.addEventListener("click", (event) => {
+      if (event.target === el.captureModal) closeCaptureModal();
+    });
+
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape" && !el.sessionModal.hidden) closeSessionModal();
+      if (event.key === "Escape" && !el.captureModal.hidden) closeCaptureModal();
     });
 
     el.codexDirInput.addEventListener("change", async (event) => {
@@ -3980,6 +4637,31 @@
           : "No session files found under sessions/";
       } catch (error) {
         el.status.textContent = `Could not list sessions: ${error.message}`;
+      }
+    });
+
+    el.captureDirInput.addEventListener("change", async (event) => {
+      const files = event.target.files || [];
+      if (!files.length) {
+        el.status.textContent = "No capture directory files selected";
+        return;
+      }
+      try {
+        const captures = await collectCapturesFromFileList(files);
+        state.captureCatalog = captures;
+        state.captureCatalogFilter = "";
+        state.captureCatalogSort = "desc";
+        state.captureCatalogView = "flat";
+        el.captureCatalogFilter.value = "";
+        el.captureCatalogSort.value = state.captureCatalogSort;
+        el.captureCatalogView.value = state.captureCatalogView;
+        renderCaptureCatalog();
+        openCaptureModal();
+        el.status.textContent = captures.length
+          ? `${captures.length} captures listed from selected directory`
+          : "No capture JSONL files found";
+      } catch (error) {
+        el.status.textContent = `Could not list captures: ${error.message}`;
       }
     });
 
