@@ -11,6 +11,7 @@
 - 针对常见 Codex 事件提供结构化详情面板，便于查看用户消息、助手消息、工具输入输出、MCP 调用和 patch 内容。
 - 可根据 `call_id` 在工具调用输入和输出之间跳转。
 - 支持导出脱敏后的 JSONL，默认会遮盖常见 token、Bearer authorization、JWT 和邮箱地址。
+- 提供本地 Responses WebSocket 抓包命令，可在不修改 Codex 源码的情况下记录模型 WebSocket 帧，见 [`WS_CAPTURE_PROXY.md`](./WS_CAPTURE_PROXY.md)。
 
 ## 快速开始
 
